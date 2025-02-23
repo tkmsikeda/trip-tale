@@ -1,0 +1,19 @@
+[project]
+name = "trip-tale"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "tkmsikeda",email = "tkms.ikeda@gmail.com"}
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "moviepy (>=2.1.2,<3.0.0)"
+]
+
+[tool.ruff]
+select = ["E", "F", "N"]
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
