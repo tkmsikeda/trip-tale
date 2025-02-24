@@ -2,8 +2,6 @@ import glob
 import logging
 import subprocess
 
-from moviepy import VideoFileClip, concatenate_videoclips
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
