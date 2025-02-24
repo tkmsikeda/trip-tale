@@ -33,8 +33,19 @@ def write_filepath_to_txtfile(file_names: list[str]):
             logger.debug(f"files.txtへの書き込み内容: file '{file_name}'")
 
 
+# 縦どり動画を変換する関数
+# 変換1: 解像度（1080x1920）をフルHD（1920x1080）にスケーリングする
+# 変換2: スケーリングにより余った横枠を黒枠を追加する。paddingするとも呼ぶ模様。
+# TODO まず期待する動画へ編集できるffmpegコマンドを探る
+# TODO その後python化
+# TODO 縦どり動画かどうかを判定する関数を作成する
+def scale_and_pad_video():
+    return
+
+
 # moviepyだと問題２個ありなので、ffmpegを利用した。
-# 問題1. 動画を結合するとbitrateが下がる。動画の画質ダウンになりそう
+# 問題1. 動画を結合するとbitrateが下がる。動画の画質ダウンになりそう。
+#        ->ffmpegコマンドだと下がらない。
 # 問題2. スマートフォンで縦撮影の動画だと、解像度とアスペクト比が変わる。
 # shellのコマンドでffmpegを実行する方式
 # ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
