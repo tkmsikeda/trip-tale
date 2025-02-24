@@ -1,5 +1,6 @@
 import glob
 import logging
+import subprocess
 
 from moviepy import VideoFileClip, concatenate_videoclips
 
@@ -25,30 +26,26 @@ def get_file_names(directory: str) -> list:
     return movie_file_names
 
 
-def merge_movies(file_names: list[str]):
-    """
-    目的: 複数の動画ファイルを１個の動画に結合すること
-    入力: ファイル名
-    出力: なし
-    処理: moviepyモジュールのVideoFileClipクラスを利用する
-    TODO(ikeda) 動画の縦横の比率が結合後に代わってしまっているので解消する
-    TODO concatenate_videoclipsは関数なので直接インポートしない
-    """
-    clips = []
-    for file_name in file_names:
-        logger.info(f"{file_name} を読み込み中")
-        clip = VideoFileClip(file_name)
-        clips.append(clip)
-        logger.debug(f"編集前の{file_name}ファイルのサイズ(w, h): {clip.size}")
+# ffmpegコマンドを実行するために必要なtxtファイルを作成する
+def write_filepath_to_txtfile(file_names: list[str]):
+    logger.debug("start write_filepath_to_txtfile")
+    with open("files.txt", "w", encoding="utf-8") as file:
+        for file_name in file_names:
+            file.write(f"file '{file_name}'\n")
+            logger.debug(f"files.txtへの書き込み内容: file '{file_name}'")
 
-    # 動画を結合
-    final_clip = concatenate_videoclips(clips, method="chain")
-    logger.debug(f"編集後のファイルのサイズ(w, h): {final_clip.size}")
 
-    # 結果をファイルに出力
-    final_clip.write_videofile("final_video.MOV", codec="libx264")
+# moviepyだと問題２個ありなので、ffmpegを利用した。
+# 問題1. 動画を結合するとbitrateが下がる。動画の画質ダウンになりそう
+# 問題2. スマートフォンで縦撮影の動画だと、解像度とアスペクト比が変わる。
+# shellのコマンドでffmpegを実行する方式
+# ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
+def merge_movies_ffmpeg():
+    output_file_name = "final_video.MOV"
+    shell_command = f"ffmpeg -f concat -safe 0 -i files.txt -c copy {output_file_name}"
 
-    return
+    logger.debug(f"shell実行: {shell_command}")
+    subprocess.run(shell_command, shell=True)
 
 
 def main():
@@ -59,8 +56,11 @@ def main():
     # ファイル一覧を取得
     file_names = get_file_names(directory)
 
+    write_filepath_to_txtfile(file_names)
+
     # 動画ファイルを１個の動画に結合
-    merge_movies(file_names)
+    # merge_movies(file_names)
+    merge_movies_ffmpeg()
 
 
 if __name__ == "__main__":
