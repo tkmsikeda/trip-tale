@@ -35,8 +35,8 @@ def write_filepath_to_txtfile_for_image(file_names: list[str]):
 
 
 # ffmpegコマンドを実行するために必要なtxtファイルを作成する
-def write_filepath_to_txtfile(file_names: list[str]):
-    with open("files.txt", "w", encoding="utf-8") as file:
+def write_filepath_to_txtfile_for_movie(file_names: list[str]):
+    with open("movie_files.txt", "w", encoding="utf-8") as file:
         for file_name in file_names:
             file.write(f"file '{file_name}'\n")
 
@@ -69,7 +69,7 @@ def main():
     # 対象のディレクトリを指定（例: 現在のディレクトリ）
     directory = "/mnt/nas/20500101_自動化テスト用"
     shell_command_for_movie_file = (
-        "ffmpeg -f concat -safe 0 -i files.txt -c copy final_video.MOV"
+        "ffmpeg -f concat -safe 0 -i movie_files.txt -c copy final_video.MOV"
     )
     shell_command_for_image_file = (
         "ffmpeg -f concat -safe 0 -i image_files.txt"
@@ -81,7 +81,7 @@ def main():
 
     # 動画ファイル一覧を取得
     movie_file_names = get_file_names(directory, "MOV")
-    write_filepath_to_txtfile(movie_file_names)
+    write_filepath_to_txtfile_for_movie(movie_file_names)
     # 動画ファイルを１個の動画に結合
     merge_movies_ffmpeg(shell_command_for_movie_file)
 
