@@ -78,18 +78,30 @@ def main():
         + 'pad=1920:1080:(ow-iw)/2:(oh-ih)/2"'
         + " -pix_fmt yuv420p output.mp4"
     )
+    shell_command_for_add_auido = (
+        "ffmpeg -stream_loop -1 -i audio.mp3 -i output.mp4"
+        + " -c:v copy -c:a aac -shortest image_audio_video.mp4"
+    )
+    # -i video.mp4：入力動画（無音）
+    # -i audio.mp3：入力音声ファイル
+    # -c:v copy： 動画の再エンコードを避けてそのままコピー
+    # -c:a aac： 音声コーデックを AAC に指定
+    # image_audio_video.mp4： 出力ファイル名
+    # -stream_loop -1: 音声がループされ、動画の長さに合わせられる。
+    # -shortest: により動画の長さでカットされる。
 
     # 動画ファイル一覧を取得
-    movie_file_names = get_file_names(directory, "MOV")
-    write_filepath_to_txtfile_for_movie(movie_file_names)
-    # 動画ファイルを１個の動画に結合
-    merge_movies_ffmpeg(shell_command_for_movie_file)
+    # movie_file_names = get_file_names(directory, "MOV")
+    # write_filepath_to_txtfile_for_movie(movie_file_names)
+    # # 動画ファイルを１個の動画に結合
+    # merge_movies_ffmpeg(shell_command_for_movie_file)
 
     logger.info("画像からスライドショー作成開始")
     logger.info("対象画像ファイルを取得")
     image_file_names = get_file_names(directory, "JPG")
     write_filepath_to_txtfile_for_image(image_file_names)
     merge_movies_ffmpeg(shell_command_for_image_file)
+    merge_movies_ffmpeg(shell_command_for_add_auido)
 
 
 if __name__ == "__main__":

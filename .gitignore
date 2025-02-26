@@ -1,2 +1,6 @@
 .env
 final_video.MOV
+*.mp4
+*.mp3
+*.MOV
+audio.mp3:Zone.Identifier
