@@ -1,3 +1,4 @@
 file '/mnt/nas/20500101_自動化テスト用/IMG_20250224_082556.MOV'
 file '/mnt/nas/20500101_自動化テスト用/IMG_20250224_082620.MOV'
-file './image_audio_video.mp4'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250227_213722.MOV'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250227_213756.MOV'
