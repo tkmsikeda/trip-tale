@@ -3,8 +3,6 @@ import json
 import logging
 import subprocess
 
-import cv2
-
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
@@ -13,6 +11,9 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+with open("ffmpeg_command.json", "r") as f:
+    FFMPEG_COMMAND = json.load(f)
 
 
 def get_file_names(directory: str, file_extension: str) -> list:
@@ -47,13 +48,25 @@ def write_filepath_to_txtfile_for_movie(file_names: list[str]):
 
 
 # 縦どり動画を変換する関数
-# 変換1: 解像度（1080x1920）をフルHD（1920x1080）にスケーリングする
-# 変換2: スケーリングにより余った横枠を黒枠を追加する。paddingするとも呼ぶ模様。
-# TODO まず期待する動画へ編集できるffmpegコマンドを探る.いったん候補としては以下。テスト用動画撮影して、コマンド試す。
-# ffmpeg -i input_video.mp4 -vf "scale=1920:1080, pad=1920:1080:(ow-iw)/2:(oh-ih)/2" -c:a copy output_video.mp4
-# TODO その後python化
-# TODO 縦どり動画かどうかを判定する関数を作成する
-def scale_and_pad_video():
+# 変換1: 縦どりの動画を90度回転させる。
+# 変換2: 解像度を1920x1080に変換する。
+# 変換3: スケーリングにより余った横枠を黒枠を追加する。paddingするとも呼ぶ模様。
+def scale_and_pad_video(file_names: list[str], target_indexs) -> None:
+
+    ffmpeg_command_template = FFMPEG_COMMAND["rotate"]
+    # -loglevel quiet : ffmpegの標準出力を抑制
+    # -vf "scale=1920:1080: 解像度を1920x1080に変換
+    # :force_original_aspect_ratio=decrease: アスペクト比を維持
+    # pad=1920:1080:(ow-iw)/2:(oh-ih)/2": 余った横枠へ黒枠を追加する
+    # transposeオプションを指定しなくても、自動的に解釈して、回転してくれる。
+
+    for target_index in target_indexs:
+        ffmpeg_command_formated = ffmpeg_command_template.format(
+            file_name=file_names[target_index],
+            output_name="rotated_" + str(target_index) + ".MOV",
+        )
+        run_shell_command(ffmpeg_command_formated)
+
     return
 
 
@@ -62,9 +75,13 @@ def get_movie_metadata(file_name: str) -> dict:
         "ffprobe -loglevel quiet -show_streams -print_format json"
         + f" {file_name} > movie_metadata.json"
     )
-    merge_movies_ffmpeg(get_metadata_shell_command)
-    movie_metadata_json = open("movie_metadata.json", "r")
-    movie_metadata = json.load(movie_metadata_json)
+    # -loglevel quiet: ffmpegの標準出力を抑制
+    # -show_streams: メタデータを表示する
+    # -print_format json: json形式で出力する
+    # > movie_metadata.json: 出力結果をmovie_metadata.jsonに保存する
+    run_shell_command(get_metadata_shell_command)
+    with open("movie_metadata.json", "r") as movie_metadata_json:
+        movie_metadata = json.load(movie_metadata_json)
 
     return movie_metadata
 
@@ -88,6 +105,7 @@ def extract_rotated_video(file_names: list[str]) -> list[int]:
     for i, file_name in enumerate(file_names):
         movie_metadata = get_movie_metadata(file_name)
         side_data_list = movie_metadata["streams"][0].get("side_data_list", 0)
+        # side_data_listがない≒横で撮影した動画なので次のループへ
         if side_data_list == 0:
             continue
         rotation = side_data_list[0].get("rotation")
@@ -98,38 +116,6 @@ def extract_rotated_video(file_names: list[str]) -> list[int]:
     return rotated_video_indexs
 
 
-def extract_non_fullhd_videos(file_names: list[str]) -> list[int]:
-    """1920x1080以外の解像度の動画を見つける
-
-    目的：ffmpegにおいて、解像度の異なる複数の動画を結合できないので
-    解像度が1920x1080以外の動画を見つけ出すこと
-
-    Args:
-        file_names(list[str]): 結合対象の動画のファイルpath一覧
-
-    Returns:
-        non_fullhd_video_indexs(list[int]): 1920x1080以外の動画が存在するlistのindex
-    """
-
-    FULLHD_WIDTH_PX = 1920
-    FULLHD_HEIGHT_PX = 1080
-
-    non_fullhd_video_indexs = []
-    for i, file_name in enumerate(file_names):
-        cap = cv2.VideoCapture(file_name)
-        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-
-        if width != FULLHD_WIDTH_PX or height != FULLHD_HEIGHT_PX:
-            non_fullhd_video_indexs.append(i)
-            logger.debug(
-                f"Found Non FullHD : {file_name}"
-                + f", width: {width}, height: {height}, index: {i}"
-            )
-
-    return non_fullhd_video_indexs
-
-
 # moviepyだと問題２個ありなので、ffmpegを利用した。
 # 問題1. 動画を結合するとbitrateが下がる。動画の画質ダウンになりそう。
 #        ->ffmpegコマンドだと下がらない。
@@ -137,8 +123,7 @@ def extract_non_fullhd_videos(file_names: list[str]) -> list[int]:
 # shellのコマンドでffmpegを実行する方式
 # ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
 # TODO 関数名と中身が伴わなくなってきたので、適切な名前に変える
-def merge_movies_ffmpeg(shell_command: str):
-    # shell_command = "ffmpeg -f concat -safe 0 -i files.txt -c copy final_video.MOV"
+def run_shell_command(shell_command: str):
     logger.debug(f"shell実行: {shell_command}")
     subprocess.run(shell_command, shell=True)
 
@@ -180,15 +165,19 @@ def main():
     # image_file_names = get_file_names(directory, "JPG")
     # write_filepath_to_txtfile_for_image(image_file_names)
     # # 音楽なしのスライドショー動画作成
-    # merge_movies_ffmpeg(shell_command_for_image_file)
+    # run_shell_command(shell_command_for_image_file)
     # # スライドショーに音楽を追加した動画に変換
-    # merge_movies_ffmpeg(shell_command_for_add_auido)
+    # run_shell_command(shell_command_for_add_auido)
 
     # 動画ファイル一覧を取得
     movie_file_names = get_file_names(directory, "MOV")
 
     # 縦撮影の動画を見つける
     rotated_video_indexs = extract_rotated_video(movie_file_names)
+    # 縦撮影の動画を変換する。原本動画は変えない。一時ファイルをローカルに配置する。
+    scale_and_pad_video(movie_file_names, rotated_video_indexs)
+    # movie_file_namesを書き換えないといけない
+    # update_taget_list(movie_file_names, rotated_video_indexs)
 
     # TODO 1920x1080へ解像度を変換する
     # TODO ファイルパスに加える
@@ -198,7 +187,7 @@ def main():
     # 結合対象の動画ファイルをtxtファイルに記載
     # write_filepath_to_txtfile_for_movie(movie_file_names)
     # # 動画ファイルを１個の動画に結合
-    # merge_movies_ffmpeg(shell_command_for_movie_file)
+    # run_shell_command(shell_command_for_movie_file)
 
 
 if __name__ == "__main__":
