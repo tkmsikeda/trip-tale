@@ -1,3 +1,4 @@
 {
-    "rotate": "ffmpeg -loglevel quiet -i {file_name} -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -c:a copy {output_name}"
+    "rotate": "ffmpeg -loglevel quiet -i {file_name} -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -c:a copy {output_name}",
+    "format": "ffmpeg -loglevel quiet -i {file_name} -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -c:v libx264 -c:a aac {output_name}"
 }

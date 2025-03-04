@@ -47,6 +47,17 @@ def write_filepath_to_txtfile_for_movie(file_names: list[str]):
             file.write(f"file '{file_name}'\n")
 
 
+def update_taget_list(
+    movie_file_names: list[str], rotated_video_indexs: list[int]
+) -> list:
+    updated_target_list = movie_file_names.copy()
+    for rotated_video_index in rotated_video_indexs:
+        updated_target_list[rotated_video_index] = (
+            "rotated_" + str(rotated_video_index) + ".MOV"
+        )
+    return updated_target_list
+
+
 # 縦どり動画を変換する関数
 # 変換1: 縦どりの動画を90度回転させる。
 # 変換2: 解像度を1920x1080に変換する。
@@ -122,19 +133,47 @@ def extract_rotated_video(file_names: list[str]) -> list[int]:
 # 問題2. スマートフォンで縦撮影の動画だと、解像度とアスペクト比が変わる。
 # shellのコマンドでffmpegを実行する方式
 # ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
-# TODO 関数名と中身が伴わなくなってきたので、適切な名前に変える
 def run_shell_command(shell_command: str):
     logger.debug(f"shell実行: {shell_command}")
     subprocess.run(shell_command, shell=True)
 
 
-# TODO リファクタリング：関数名を適切にしたい
-# TODO リファクタリング：ファイル名を変数化したい
-# TODO リファクタリング: コマンドをJSONファイルに外だしして読み込む
+def format_all_movie(file_names: list[str]) -> list[str]:
+    """動画のフォーマットを統一する
+
+    動画の種類によって、処理が変わる。ただしコマンドは同一のもの。
+    横取り動画の場合: ffmpegによりコーデックされるのみ
+    縦どり動画の場合: ffmpegによりコーデックされる事に加え、解像度を1920x1080に変換し
+    余った横枠に黒枠を追加する
+
+    Args:
+        file_names(list[str]): 動画ファイルのリスト
+
+    Returns:
+        formatted_movie_file_names(list[str]): フォーマット後の動画ファイル名のリスト
+    """
+    formatted_movie_file_names = []
+
+    for i, file_name in enumerate(file_names):
+        output_name = "formatted_" + str(i) + ".MOV"
+        ffmpeg_command_template = FFMPEG_COMMAND["format"]
+        ffmpeg_command_formated = ffmpeg_command_template.format(
+            file_name=file_name,
+            output_name=output_name,
+        )
+        run_shell_command(ffmpeg_command_formated)
+        formatted_movie_file_names.append(output_name)
+
+    return formatted_movie_file_names
+
+
+# TODO リファクタリング：コマンド中のファイル名を変数化したい
 def main():
     """メイン関数"""
     # 対象のディレクトリを指定（例: 現在のディレクトリ）
     directory = "/mnt/nas/20500101_自動化テスト用"
+
+    # TODO 以下のコマンドは、ffmpeg_command.jsonに外だしして読み込む
     # 複数の動画ファイルを結合して1個の動画にするshellコマンド
     shell_command_for_movie_file = (
         "ffmpeg -f concat -safe 0 -i movie_files.txt -c copy final_video.MOV"
@@ -171,23 +210,25 @@ def main():
 
     # 動画ファイル一覧を取得
     movie_file_names = get_file_names(directory, "MOV")
+    # 動画のフォーマットを統一する
+    formatted_movie_file_names = format_all_movie(movie_file_names)
 
-    # 縦撮影の動画を見つける
-    rotated_video_indexs = extract_rotated_video(movie_file_names)
-    # 縦撮影の動画を変換する。原本動画は変えない。一時ファイルをローカルに配置する。
-    scale_and_pad_video(movie_file_names, rotated_video_indexs)
-    # movie_file_namesを書き換えないといけない
-    # update_taget_list(movie_file_names, rotated_video_indexs)
-
-    # TODO 1920x1080へ解像度を変換する
-    # TODO ファイルパスに加える
+    # # 縦撮影の動画を見つける
+    # rotated_video_indexs = extract_rotated_video(movie_file_names)
+    # # 縦撮影の動画を変換する。原本動画は変えない。一時ファイルをローカルに配置する。
+    # scale_and_pad_video(movie_file_names, rotated_video_indexs)
+    # # movie_file_namesへ縦どり動画のパスで更新
+    # movie_file_names = update_taget_list(movie_file_names, rotated_video_indexs)
+    # print(movie_file_names)
 
     # # 動画の最後に写真スライドショー動画を追加すべく、対象に追記
     # movie_file_names.append("./image_audio_video.mp4")
+
+    # TODO 以下の処理は関数にまとめて、内部的に関数を呼ぶようにしたほうが可読性が高いかもしれない
     # 結合対象の動画ファイルをtxtファイルに記載
-    # write_filepath_to_txtfile_for_movie(movie_file_names)
-    # # 動画ファイルを１個の動画に結合
-    # run_shell_command(shell_command_for_movie_file)
+    write_filepath_to_txtfile_for_movie(formatted_movie_file_names)
+    # 動画ファイルを１個の動画に結合
+    run_shell_command(shell_command_for_movie_file)
 
 
 if __name__ == "__main__":
