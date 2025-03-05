@@ -1,3 +1,6 @@
 {
-    "format": "ffmpeg -loglevel quiet -i {file_name} -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -c:v libx264 -c:a aac {output_name}"
+    "format": "ffmpeg -loglevel quiet -i {file_name} -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -c:v libx264 -c:a aac {output_name}",
+    "merge_all_video": "ffmpeg -f concat -safe 0 -i movie_files.txt -c copy final_video.MOV",
+    "convert_photos_to_video": "ffmpeg -f concat -safe 0 -i image_files.txt -vsync vfr -vcodec libx264 -vf \"scale=1920:1080:force_original_aspect_ratio=decrease,pad=1920:1080:(ow-iw)/2:(oh-ih)/2\" -pix_fmt yuv420p output.MOV",
+    "add_audio_to_video": "ffmpeg -stream_loop -1 -i audio.mp3 -i output.MOV -c:v copy -c:a aac -shortest image_audio_video.MOV"
 }

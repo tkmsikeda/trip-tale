@@ -100,54 +100,29 @@ def main():
     # 対象のディレクトリを指定（例: 現在のディレクトリ）
     directory = "/mnt/nas/20500101_自動化テスト用"
 
-    # TODO 以下のコマンドは、ffmpeg_command.jsonに外だしして読み込む
-    # 複数の動画ファイルを結合して1個の動画にするshellコマンド
-    shell_command_for_movie_file = (
-        "ffmpeg -f concat -safe 0 -i movie_files.txt -c copy final_video.MOV"
-    )
-    # 複数の画像ファイルを結合してスライドショー動画にするshellコマンド
-    shell_command_for_image_file = (
-        "ffmpeg -f concat -safe 0 -i image_files.txt"
-        + " -vsync vfr -vcodec libx264"
-        + ' -vf "scale=1920:1080:force_original_aspect_ratio=decrease,'
-        + 'pad=1920:1080:(ow-iw)/2:(oh-ih)/2"'
-        + " -pix_fmt yuv420p output.mp4"
-    )
-    # 無音のスライドショー動画に音楽を追加するshellコマンド
-    shell_command_for_add_auido = (
-        "ffmpeg -stream_loop -1 -i audio.mp3 -i output.mp4"
-        + " -c:v copy -c:a aac -shortest image_audio_video.mp4"
-    )
-    # -i video.mp4：入力動画（無音）
-    # -i audio.mp3：入力音声ファイル
-    # -c:v copy： 動画の再エンコードを避けてそのままコピー
-    # -c:a aac： 音声コーデックを AAC に指定
-    # image_audio_video.mp4： 出力ファイル名
-    # -stream_loop -1: 音声がループされ、動画の長さに合わせられる。
-    # -shortest: 音声が動画の長さでカットされる。
-
-    # logger.info("画像からスライドショー作成開始")
-    # logger.info("対象画像ファイルを取得")
-    # image_file_names = get_file_names(directory, "JPG")
-    # write_filepath_to_txtfile_for_image(image_file_names)
-    # # 音楽なしのスライドショー動画作成
-    # run_shell_command(shell_command_for_image_file)
-    # # スライドショーに音楽を追加した動画に変換
-    # run_shell_command(shell_command_for_add_auido)
+    logger.info("画像からスライドショー作成開始")
+    logger.info("対象画像ファイルを取得")
+    image_file_names = get_file_names(directory, "JPG")
+    write_filepath_to_txtfile_for_image(image_file_names)
+    # 音楽なしのスライドショー動画作成
+    run_shell_command(FFMPEG_COMMAND["convert_photos_to_video"])
+    # スライドショーに音楽を追加した動画に変換
+    run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
 
     # 動画ファイル一覧を取得
     movie_file_names = get_file_names(directory, "MOV")
+
+    # 動画の最後に写真スライドショー動画を追加すべく、対象に追記
+    movie_file_names.append("./image_audio_video.MOV")
+
     # 動画のフォーマットを統一する
     formatted_movie_file_names = format_all_movie(movie_file_names)
-
-    # # 動画の最後に写真スライドショー動画を追加すべく、対象に追記
-    # movie_file_names.append("./image_audio_video.mp4")
 
     # TODO 以下の処理は関数にまとめて、内部的に関数を呼ぶようにしたほうが可読性が高いかもしれない
     # 結合対象の動画ファイルをtxtファイルに記載
     write_filepath_to_txtfile_for_movie(formatted_movie_file_names)
     # 動画ファイルを１個の動画に結合
-    run_shell_command(shell_command_for_movie_file)
+    run_shell_command(FFMPEG_COMMAND["merge_all_video"])
 
 
 if __name__ == "__main__":
