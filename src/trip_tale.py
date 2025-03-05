@@ -41,16 +41,12 @@ def write_filepath_to_txtfile_for_image(file_names: list[str]):
 
 
 # ffmpegコマンドを実行するために必要なtxtファイルを作成する
-def write_filepath_to_txtfile_for_movie(file_names: list[str]):
-    with open("movie_files.txt", "w", encoding="utf-8") as file:
+def write_filepath_to_txtfile_for_video(file_names: list[str]):
+    with open("video_files.txt", "w", encoding="utf-8") as file:
         for file_name in file_names:
             file.write(f"file '{file_name}'\n")
 
 
-# moviepyだと問題２個ありなので、ffmpegを利用した。
-# 問題1. 動画を結合するとbitrateが下がる。動画の画質ダウンになりそう。
-#        ->ffmpegコマンドだと下がらない。
-# 問題2. スマートフォンで縦撮影の動画だと、解像度とアスペクト比が変わる。
 # shellのコマンドでffmpegを実行する方式
 # ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
 def run_shell_command(shell_command: str):
@@ -58,7 +54,7 @@ def run_shell_command(shell_command: str):
     subprocess.run(shell_command, shell=True)
 
 
-def format_all_movie(file_names: list[str]) -> list[str]:
+def format_all_video(file_names: list[str]) -> list[str]:
     """動画のフォーマットを統一する
 
     動画の種類によって、処理が変わる。ただしコマンドは同一のもの。
@@ -77,9 +73,9 @@ def format_all_movie(file_names: list[str]) -> list[str]:
         file_names(list[str]): 動画ファイルのリスト
 
     Returns:
-        formatted_movie_file_names(list[str]): フォーマット後の動画ファイル名のリスト
+        formatted_video_file_names(list[str]): フォーマット後の動画ファイル名のリスト
     """
-    formatted_movie_file_names = []
+    formatted_video_file_names = []
 
     for i, file_name in enumerate(file_names):
         output_name = "formatted_" + str(i) + ".MOV"
@@ -89,9 +85,9 @@ def format_all_movie(file_names: list[str]) -> list[str]:
             output_name=output_name,
         )
         run_shell_command(ffmpeg_command_formated)
-        formatted_movie_file_names.append(output_name)
+        formatted_video_file_names.append(output_name)
 
-    return formatted_movie_file_names
+    return formatted_video_file_names
 
 
 # TODO リファクタリング：コマンド中のファイル名を変数化したい
@@ -110,17 +106,17 @@ def main():
     run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
 
     # 動画ファイル一覧を取得
-    movie_file_names = get_file_names(directory, "MOV")
+    video_file_names = get_file_names(directory, "MOV")
 
     # 動画の最後に写真スライドショー動画を追加すべく、対象に追記
-    movie_file_names.append("./image_audio_video.MOV")
+    video_file_names.append("./image_audio_video.MOV")
 
     # 動画のフォーマットを統一する
-    formatted_movie_file_names = format_all_movie(movie_file_names)
+    formatted_video_file_names = format_all_video(video_file_names)
 
     # TODO 以下の処理は関数にまとめて、内部的に関数を呼ぶようにしたほうが可読性が高いかもしれない
     # 結合対象の動画ファイルをtxtファイルに記載
-    write_filepath_to_txtfile_for_movie(formatted_movie_file_names)
+    write_filepath_to_txtfile_for_video(formatted_video_file_names)
     # 動画ファイルを１個の動画に結合
     run_shell_command(FFMPEG_COMMAND["merge_all_video"])
 
