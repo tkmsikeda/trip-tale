@@ -58,7 +58,7 @@ def main():
     image_file_names = get_file_names(directory, "JPG")
     write_filepath_to_txtfile_for_image(image_file_names)
     # 音楽なしのスライドショー動画作成
-    run_shell_command(FFMPEG_COMMAND["convert_photos_to_video"])
+    run_shell_command(FFMPEG_COMMAND["convert_images_to_video"])
     # スライドショーに音楽を追加した動画に変換
     run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
 

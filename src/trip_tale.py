@@ -25,7 +25,7 @@ def main():
         logger.info("全ての動画を結合完了")
 
     except Exception as e:
-        logger.error(f"画像からスライドショー作成失敗: {e}")
+        logger.error(f"動画作成失敗: {e}")
 
 
 if __name__ == "__main__":
