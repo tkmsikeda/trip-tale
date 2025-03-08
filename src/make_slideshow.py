@@ -50,12 +50,15 @@ def run_shell_command(shell_command: str):
 # TODO リファクタリング：コマンド中のファイル名を変数化したい
 def main():
     """メイン関数"""
-    # 対象のディレクトリを指定（例: 現在のディレクトリ）
+    # 対象のディレクトリを指定
     directory = "/mnt/nas/20500101_自動化テスト用"
 
     logger.info("画像からスライドショー作成開始")
     logger.info("対象画像ファイルを取得")
     image_file_names = get_file_names(directory, "JPG")
+
+    # TODO ファイルが0個の時の処理を書く
+
     write_filepath_to_txtfile_for_image(image_file_names)
     # 音楽なしのスライドショー動画作成
     run_shell_command(FFMPEG_COMMAND["convert_images_to_video"])
