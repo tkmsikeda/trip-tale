@@ -17,11 +17,11 @@ def main():
     """メイン関数"""
     try:
         logger.info("画像からスライドショー作成開始")
-        make_slideshow.main()
+        make_slideshow.Makesladeshow().main()
         logger.info("画像からスライドショー作成完了")
 
         logger.info("全ての動画を結合開始")
-        merge_videos.main()
+        merge_videos.MergeVideos().main()
         logger.info("全ての動画を結合完了")
 
     except Exception as e:
