@@ -1,9 +1,11 @@
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250225_210512.JPG'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_094449.JPG'
 duration 5
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250225_210523.JPG'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_094511.JPG'
 duration 5
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250227_081855.JPG'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_100034.JPG'
 duration 5
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250227_081915.JPG'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_100035.JPG'
 duration 5
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250227_081915.JPG'
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_100054.JPG'
+duration 5
+file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_100054.JPG'
