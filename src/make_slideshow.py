@@ -1,70 +1,37 @@
-import glob
 import json
-import logging
-import subprocess
 
+import make_video_base
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-handler = logging.StreamHandler()
-formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
-handler.setFormatter(formatter)
-logger.addHandler(handler)
 
 with open("ffmpeg_command.json", "r") as f:
     FFMPEG_COMMAND = json.load(f)
 
 
-def get_file_names(directory: str, file_extension: str) -> list:
-    """指定したディレクトリ内のファイルとフォルダをリストアップする関数"""
+class Makesladeshow(make_video_base.MakeVideoBase):
+    def __init__(self):
+        super().__init__()
 
-    file_names = glob.glob(directory + f"/*.{file_extension}")
+    def write_filepath_to_txtfile_for_image(self, file_names: list[str]):
+        with open("image_files.txt", "w", encoding="utf-8") as file:
+            for file_name in file_names:
+                file.write(f"file '{file_name}'\nduration 5\n")
+            # ffmpegの仕様で最後のファイルを2度書かないと表示してくれないので、追記。
+            file.write(f"file '{file_names[-1]}'")
 
-    # 撮影順でソート
-    file_names.sort()
-    logger.info(f"{len(file_names)} 個の{file_extension}ファイルが見つかりました")
-    for file_name in file_names:
-        logger.debug(file_name)
+    def main(self):
+        """メイン関数"""
+        # 対象のディレクトリを指定
+        directory = "/mnt/nas/20500101_自動化テスト用"
 
-    return file_names
+        self.logger.info("画像からスライドショー作成開始")
+        self.logger.info("対象画像ファイルを取得")
 
+        image_file_names = self.get_file_names(directory, "JPG")
 
-# TODO  write_filepath_to_txtfile関数と共通部分が多いので1個にできないか？
-# 写真からスライドショー動画に変換する対象の写真ファイルを追記
-def write_filepath_to_txtfile_for_image(file_names: list[str]):
-    with open("image_files.txt", "w", encoding="utf-8") as file:
-        for file_name in file_names:
-            file.write(f"file '{file_name}'\nduration 5\n")
-        # ffmpegの仕様で最後のファイルを2度書かないと表示してくれないので、追記。
-        file.write(f"file '{file_names[-1]}'")
+        # TODO ファイルが0個の時の処理を書く
 
-
-# shellのコマンドでffmpegを実行する方式
-# ffmpegライブラリが結局↑を実施していて、使い方も理想形ではないので、自分で書く。
-def run_shell_command(shell_command: str):
-    logger.debug(f"shell実行: {shell_command}")
-    subprocess.run(shell_command, shell=True)
-
-
-# TODO リファクタリング：コマンド中のファイル名を変数化したい
-def main():
-    """メイン関数"""
-    # 対象のディレクトリを指定
-    directory = "/mnt/nas/20500101_自動化テスト用"
-
-    logger.info("画像からスライドショー作成開始")
-    logger.info("対象画像ファイルを取得")
-    image_file_names = get_file_names(directory, "JPG")
-
-    # TODO ファイルが0個の時の処理を書く
-
-    write_filepath_to_txtfile_for_image(image_file_names)
-    # 音楽なしのスライドショー動画作成
-    run_shell_command(FFMPEG_COMMAND["convert_images_to_video"])
-    # スライドショーに音楽を追加した動画に変換
-    run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
-
-
-if __name__ == "__main__":
-    main()
+        self.write_filepath_to_txtfile_for_image(image_file_names)
+        # 音楽なしのスライドショー動画作成
+        self.run_shell_command(FFMPEG_COMMAND["convert_images_to_video"])
+        # スライドショーに音楽を追加した動画に変換
+        self.run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
