@@ -1,6 +1,6 @@
 file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_094449.JPG'
 duration 5
-file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_094511.JPG'
+file 'IMG_20250220_094511_rotated.JPG'
 duration 5
 file '/mnt/nas/20500101_自動化テスト用/IMG_20250220_100034.JPG'
 duration 5

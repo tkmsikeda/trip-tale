@@ -4,23 +4,24 @@ import subprocess
 
 
 class MakeVideoBase:
-    def __init__(self):
+    def __init__(self, directory: str, file_extension: str):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
         formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
+        self.file_paths = self._get_file_paths(directory, file_extension)
 
-    def get_file_names(self, directory: str, file_extension: str) -> list:
-        file_names = glob.glob(directory + f"/*.{file_extension}")
-        file_names.sort()
+    def _get_file_paths(self, directory: str, file_extension: str) -> list:
+        file_paths = glob.glob(directory + f"/*.{file_extension}")
+        file_paths.sort()
         self.logger.info(
-            f"{len(file_names)} 個の{file_extension}ファイルが見つかりました"
+            f"{len(file_paths)} 個の{file_extension}ファイルが見つかりました"
         )
-        for file_name in file_names:
-            self.logger.debug(file_name)
-        return file_names
+        for file_path in file_paths:
+            self.logger.debug(file_path)
+        return file_paths
 
     def run_shell_command(self, shell_command: str):
         self.logger.debug(f"shell実行: {shell_command}")
