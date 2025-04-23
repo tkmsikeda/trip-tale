@@ -1,12 +1,5 @@
-import json
-
 import image_rotater
 import make_video_base
-
-
-# TODO: クラスの属性に含める
-with open("ffmpeg_command.json", "r") as f:
-    FFMPEG_COMMAND = json.load(f)
 
 
 class Makesladeshow(make_video_base.MakeVideoBase):
@@ -21,15 +14,14 @@ class Makesladeshow(make_video_base.MakeVideoBase):
             file.write(f"file '{self.file_paths[-1]}'")
 
     def rotate_images(self):
-        
         for index, file_path in enumerate(self.file_paths):
-            # 画像の回転処理を実施する
             is_rotated, image_path = image_rotater.rotate_image(file_path)
             if is_rotated:
                 # 回転させた写真は、別ファイルかつ置き場が違うため、書き換える
                 self.file_paths[index] = image_path
                 
 
+    # TODO: 一時的な動画ファイルを最後に削除する
 
     def main(self):
 
@@ -45,6 +37,6 @@ class Makesladeshow(make_video_base.MakeVideoBase):
         self.write_filepath_to_txtfile_for_image()
 
         # 音楽なしのスライドショー動画作成
-        self.run_shell_command(FFMPEG_COMMAND["convert_images_to_video"])
+        self.run_shell_command(self.FFMPEG_COMMAND["convert_images_to_video"])
         # スライドショーに音楽を追加した動画に変換
-        self.run_shell_command(FFMPEG_COMMAND["add_audio_to_video"])
+        self.run_shell_command(self.FFMPEG_COMMAND["add_audio_to_video"])
