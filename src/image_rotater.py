@@ -35,9 +35,9 @@ def _get_orientation(image_path: str) -> int:
         tagname_value_map[tag_name] = value
 
     logger.debug(f"exif data of {image_path} : {tagname_value_map}")
-    logger.info(f"orientation of {image_path}: {tagname_value_map['Orientation']}")
+    logger.info(f"orientation of {image_path}: {tagname_value_map.get("Orientation", default_orientation)}")
 
-    return tagname_value_map["Orientation"]
+    return tagname_value_map.get("Orientation", default_orientation)
 
 # 回転情報があると、ffmpegで動画化する際に、邪魔になる
 # そのため、写真を回転させたのち、回転情報を除去する

@@ -1,12 +1,5 @@
-import json
-import logging
-
+import fps_getter
 import make_video_base
-
-
-# TODO: クラスの属性に含めているので、テストしてから削除
-# with open("ffmpeg_command.json", "r") as f:
-#     FFMPEG_COMMAND = json.load(f)
 
 
 class MergeVideos(make_video_base.MakeVideoBase):
@@ -45,7 +38,12 @@ class MergeVideos(make_video_base.MakeVideoBase):
         # TODO 変数名をわかりやすくしたい
         for i, file_path in enumerate(self.file_paths):
             output_name = "formatted_" + str(i) + ".MOV"
-            ffmpeg_command_template = self.FFMPEG_COMMAND["format"]
+
+            if fps_getter.should_change_fps(file_path):
+                ffmpeg_command_template = self.FFMPEG_COMMAND["change_fps"]
+            else:
+                ffmpeg_command_template = self.FFMPEG_COMMAND["format"]
+
             ffmpeg_command_formated = ffmpeg_command_template.format(
                 file_path=file_path,
                 output_name=output_name,
