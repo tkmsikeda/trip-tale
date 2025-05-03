@@ -15,13 +15,15 @@ logger.addHandler(handler)
 # TODO リファクタリング：コマンド中のファイル名を変数化したい
 def main():
     """メイン関数"""
+    directory = "/mnt/nas/20500101_自動化テスト用"
+
     try:
         logger.info("画像からスライドショー作成開始")
-        make_slideshow.Makesladeshow().main()
+        make_slideshow.Makesladeshow(directory, "JPG").main()
         logger.info("画像からスライドショー作成完了")
 
         logger.info("全ての動画を結合開始")
-        merge_videos.MergeVideos().main()
+        merge_videos.MergeVideos(directory, "MOV").main()
         logger.info("全ての動画を結合完了")
 
     except Exception as e:
