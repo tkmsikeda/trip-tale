@@ -8,13 +8,15 @@ class SlideshowMaker(maker_base.MakerBase):
 
     def __init__(self, directory: str, file_extension: str):
         super().__init__(directory, file_extension)
+        self.target_image_paths: list = []
 
     def _rotate_images(self):
-        for index, file_path in enumerate(self.file_paths):
-            is_rotated, image_path = image_rotater.rotate_image(file_path)
-            if is_rotated:
-                # 回転させた写真は、別ファイルかつ置き場が違うため、書き換える
-                self.file_paths[index] = image_path
+        for file_path in self.file_paths:
+            image_path = image_rotater.rotate_image(file_path)
+
+            # 回転させてない写真：元々の置き場
+            # 回転させた写真：ローカル
+            self.target_image_paths.append(image_path)
 
     def _write_ffmpeg_list(self):
         with open(self.FFMPEG_LIST_FILE, "w", encoding="utf-8") as file:

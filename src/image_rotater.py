@@ -44,29 +44,25 @@ def _get_orientation(image_path: str) -> int:
 
 # 回転情報があると、ffmpegで動画化する際に、邪魔になる
 # そのため、写真を回転させたのち、回転情報を除去する
-# 出力：回転させた場合、対象ファイルのパスを書き換えたいので、その判定用
-def rotate_image(image_path: str) -> tuple[bool, str]:
+# 出力：回転させた場合: ローカルのファイルパス、回転しない場合：元のファイルパス
+def rotate_image(image_path: str) -> str:
 
-    is_rotated = False
     orientation = _get_orientation(image_path)
     if orientation == 1:
         logger.info("no rotate")
-        return is_rotated, image_path
+        return image_path
 
     with Image.open(image_path) as img:
 
         if orientation == 3:
             img_rotated = img.rotate(180, expand=True)
             logger.info("rotate 180")
-            is_rotated = True
         elif orientation == 6:  # 90度回転
             img_rotated = img.rotate(270, expand=True)
             logger.info("rotate 90")
-            is_rotated = True
         elif orientation == 8:  # -90度回転
             img_rotated = img.rotate(90, expand=True)
             logger.info("rotate -90")
-            is_rotated = True
 
         # 例: image.jpg → image_rotated.jpg
         base, ext = os.path.splitext(image_path)
@@ -80,7 +76,7 @@ def rotate_image(image_path: str) -> tuple[bool, str]:
 
         img_rotated.save(filename, exif=exif_bytes)
         logger.info(f"save rotated image: {filename}")
-        return is_rotated, filename
+        return filename
 
 
 if __name__ == "__main__":
