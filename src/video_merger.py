@@ -1,8 +1,8 @@
 import fps_getter
-import make_video_base
+import maker_base
 
 
-class VideoMerger(make_video_base.MakeVideoBase):
+class VideoMerger(maker_base.MakerBase):
     FFMPEG_LIST_FILE = "video_files.txt"
 
     def __init__(self, directory: str, file_extension: str):
@@ -37,9 +37,6 @@ class VideoMerger(make_video_base.MakeVideoBase):
         :force_original_aspect_ratio=decrease: アスペクト比を維持
         pad=1920:1080:(ow-iw)/2:(oh-ih)/2": 余った横枠へ黒枠を追加する
         transposeオプションを指定しなくても、自動的に解釈して、回転してくれる。
-
-        Args:
-            file_names(list[str]): 動画ファイルのリスト
         """
 
         for i, file_path in enumerate(self.file_paths):
@@ -56,8 +53,8 @@ class VideoMerger(make_video_base.MakeVideoBase):
 
     def _write_ffmpeg_list(self):
         with open(self.FFMPEG_LIST_FILE, "w", encoding="utf-8") as file:
-            for file_name in self.target_video_paths:
-                file.write(f"file '{file_name}'\n")
+            for file_path in self.target_video_paths:
+                file.write(f"file '{file_path}'\n")
 
     def _merge_videos_with_ffmpeg(self):
         self._write_ffmpeg_list()
