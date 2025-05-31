@@ -5,7 +5,6 @@ import piexif
 from PIL import Image, ExifTags
 
 
-
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
@@ -13,6 +12,7 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
 
 def _get_orientation(image_path: str) -> int:
     """
@@ -22,22 +22,25 @@ def _get_orientation(image_path: str) -> int:
     """
     with Image.open(image_path) as img:
         exif = img._getexif()
-        
+
     default_orientation = 1
     if exif is None:
         return default_orientation
-    
+
     # 生のexifデータのままだと、ID番号: 値の形式。
     # 回転情報がID何番かわかりずらい。※274番が回転情報
     tagname_value_map = {}
     for tag_id, value in exif.items():
-        tag_name = ExifTags.TAGS.get(tag_id, tag_id)  
+        tag_name = ExifTags.TAGS.get(tag_id, tag_id)
         tagname_value_map[tag_name] = value
 
     logger.debug(f"exif data of {image_path} : {tagname_value_map}")
-    logger.info(f"orientation of {image_path}: {tagname_value_map.get("Orientation", default_orientation)}")
+    logger.info(
+        f"orientation of {image_path}: {tagname_value_map.get("Orientation", default_orientation)}"
+    )
 
     return tagname_value_map.get("Orientation", default_orientation)
+
 
 # 回転情報があると、ffmpegで動画化する際に、邪魔になる
 # そのため、写真を回転させたのち、回転情報を除去する
@@ -51,7 +54,7 @@ def rotate_image(image_path: str) -> tuple[bool, str]:
         return is_rotated, image_path
 
     with Image.open(image_path) as img:
-        
+
         if orientation == 3:
             img_rotated = img.rotate(180, expand=True)
             logger.info("rotate 180")
@@ -70,12 +73,11 @@ def rotate_image(image_path: str) -> tuple[bool, str]:
         tmp = f"{base}_rotated{ext}"
         filename = os.path.basename(tmp)
 
-
         exif = img._getexif()
         exif[274] = 1
         exif_dict = {"0th": {piexif.ImageIFD.Orientation: 1}}
         exif_bytes = piexif.dump(exif_dict)
-        
+
         img_rotated.save(filename, exif=exif_bytes)
         logger.info(f"save rotated image: {filename}")
         return is_rotated, filename

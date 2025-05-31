@@ -15,7 +15,7 @@ logger.addHandler(handler)
 # TODO リファクタリング：コマンド中のファイル名を変数化したい
 def main():
     """メイン関数"""
-    directory = "xxx"
+    directory = "/mnt/c/Users/ikeda/Pictures/a"
 
     try:
         logger.info("画像からスライドショー作成開始")

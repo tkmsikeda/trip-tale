@@ -1,8 +1,8 @@
 import image_rotater
-import make_video_base
+import maker_base
 
 
-class SlideshowMaker(make_video_base.MakeVideoBase):
+class SlideshowMaker(maker_base.MakerBase):
     DURATION_PER_IMAGE_SECONDS = 5
     FFMPEG_LIST_FILE = "image_files.txt"
 

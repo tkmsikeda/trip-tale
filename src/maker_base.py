@@ -4,7 +4,7 @@ import logging
 import subprocess
 
 
-class MakeVideoBase:
+class MakerBase:
     def __init__(self, directory: str, file_extension: str):
         self.logger = logging.getLogger(self.__class__.__name__)
         self.logger.setLevel(logging.DEBUG)
@@ -24,12 +24,11 @@ class MakeVideoBase:
         for file_path in file_paths:
             self.logger.debug(file_path)
         return file_paths
-    
+
     def _get_ffmpeg_commands(self) -> dict[str, str]:
         with open("ffmpeg_command.json", "r") as f:
             ffmpeg_command = json.load(f)
         return ffmpeg_command
-
 
     def run_shell_command(self, shell_command: str):
         self.logger.debug(f"shell実行: {shell_command}")
