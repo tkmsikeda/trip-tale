@@ -12,7 +12,7 @@ class MakerBase:
         formatter = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
-        self.file_paths = self._get_file_paths(directory, file_extension)
+        self.original_file_paths = self._get_file_paths(directory, file_extension)
         self.FFMPEG_COMMAND = self._get_ffmpeg_commands()
 
     def _get_file_paths(self, directory: str, file_extension: str) -> list:

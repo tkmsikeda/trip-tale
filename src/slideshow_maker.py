@@ -11,7 +11,7 @@ class SlideshowMaker(maker_base.MakerBase):
         self.target_image_paths: list = []
 
     def _rotate_images(self):
-        for file_path in self.file_paths:
+        for file_path in self.original_file_paths:
             image_path = image_rotater.rotate_image(file_path)
 
             # 回転させてない写真：元々の置き場
@@ -20,12 +20,12 @@ class SlideshowMaker(maker_base.MakerBase):
 
     def _write_ffmpeg_list(self):
         with open(self.FFMPEG_LIST_FILE, "w", encoding="utf-8") as file:
-            for file_path in self.file_paths:
-                file.write(f"file '{file_path}'\n")
+            for target_file_path in self.target_image_paths:
+                file.write(f"file '{target_file_path}'\n")
                 file.write(f"duration {self.DURATION_PER_IMAGE_SECONDS}\n")
 
             # ffmpegの仕様で最後のファイルを2度書かないと表示してくれないので、追記。
-            file.write(f"file '{self.file_paths[-1]}'")
+            file.write(f"file '{self.target_image_paths[-1]}'")
 
     def _images_to_video(self):
         self.run_shell_command(self.FFMPEG_COMMAND["convert_images_to_video"])
@@ -39,7 +39,7 @@ class SlideshowMaker(maker_base.MakerBase):
 
         self.logger.info("画像からスライドショー作成開始")
 
-        if not self.file_paths:
+        if not self.original_file_paths:
             self.logger.warning(
                 "対象の画像ファイルがありません。スライドショーを作成できません。"
             )

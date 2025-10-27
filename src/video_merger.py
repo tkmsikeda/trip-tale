@@ -39,7 +39,7 @@ class VideoMerger(maker_base.MakerBase):
         transposeオプションを指定しなくても、自動的に解釈して、回転してくれる。
         """
 
-        for i, file_path in enumerate(self.file_paths):
+        for i, file_path in enumerate(self.original_file_paths):
             output_name = "formatted_" + str(i) + ".MOV"
 
             # ffmpegの制約で動画のFPSを統一しないと、最後に結合できない
@@ -63,14 +63,14 @@ class VideoMerger(maker_base.MakerBase):
     # TODO リファクタリング：コマンド中のファイル名を変数化したい
     def merge_videos(self):
 
-        if not self.file_paths:
+        if not self.original_file_paths:
             self.logger.warning(
                 "対象の動画ファイルがありません。動画を作成できません。"
             )
             return
 
         # 動画の最後に、スライドショー動画を追加するために、対象に追記
-        self.file_paths.append("./image_audio_video.MOV")
+        self.original_file_paths.append("./image_audio_video.MOV")
 
         # ffmpegの制約で、フォーマットを統一する前処理を実施
         self._format_all_video()
