@@ -16,20 +16,20 @@ logger.addHandler(handler)
 # TODO リファクタリング：コマンド中のファイル名を変数化したい
 def main():
     """メイン関数"""
-    directory = "/mnt/nas/20251122-マリフェス/"
+    directory = "/home/ikeda/trip-tale/dl/"
 
     try:
         logger.info("画像からスライドショー作成開始")
-        slideshow_maker.SlideshowMaker(directory, "JPG").create_slideshow()
+        slideshow_maker.SlideshowMaker(directory, "jpeg").create_slideshow()
         logger.info("画像からスライドショー作成完了")
 
         logger.info("全ての動画を結合開始")
-        video_merger.VideoMerger(directory, "MOV").merge_videos()
+        video_merger.VideoMerger(directory, "mp4").merge_videos()
         logger.info("全ての動画を結合完了")
 
-        logger.info("YouTubeへの動画アップロード開始")
-        youtube_uploader.main()
-        logger.info("YouTubeへの動画アップロード完了")
+        # logger.info("YouTubeへの動画アップロード開始")
+        # youtube_uploader.main()
+        # logger.info("YouTubeへの動画アップロード完了")
 
     except Exception as e:
         logger.error(f"動画作成失敗: {e}")

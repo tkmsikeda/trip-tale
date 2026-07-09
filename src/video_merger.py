@@ -11,6 +11,7 @@ class VideoMerger(maker_base.MakerBase):
 
     def _select_ffmpeg_by_fps(self, file_path: str) -> str:
         """動画のFPSに応じて、ffmpegコマンドを選択する
+           最後に結合する際にfpsを30/60でないと、再生速度がおかしい動画になるため、30/60に近いfpsの場合は、30/60に変換する。
 
         Args:
             file_path(str): 動画ファイルのパス
@@ -18,10 +19,19 @@ class VideoMerger(maker_base.MakerBase):
         Returns:
             ffmpeg_command(str): 選択されたffmpegコマンド
         """
-        if fps_getter.should_change_fps(file_path):
-            return self.FFMPEG_COMMAND["change_fps"]
-        else:
+
+        fps = round(fps_getter.get_fps(file_path), 2)
+
+        if fps in (30.0, 60.0):  # 30/60fpsは変換なし
             return self.FFMPEG_COMMAND["format"]
+
+        if fps == 29.97:  # 29.97fpsは30fpsに変換
+            return self.FFMPEG_COMMAND["change_fps_30"]
+
+        if fps == 59.94:  # 59.94fpsは60fpsに変換
+            return self.FFMPEG_COMMAND["change_fps_60"]
+
+        return self.FFMPEG_COMMAND["change_fps_30"]
 
     def _format_all_video(self):
         """動画のフォーマットを統一する
