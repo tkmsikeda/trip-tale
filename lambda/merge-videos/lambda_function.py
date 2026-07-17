@@ -32,6 +32,17 @@ def create_concat_file(file_list):
     return concat_path
 
 
+def reorder_file_list(file_list, keyword="slideshow"):
+    """basename に `keyword` を含むファイルを末尾へ移動し、元の相対順序を保持します。
+
+    パスの basename を大文字小文字を区別せずに検索します。
+    """
+    keyword_l = keyword.lower()
+    slides = [p for p in file_list if keyword_l in os.path.basename(p).lower()]
+    others = [p for p in file_list if keyword_l not in os.path.basename(p).lower()]
+    return others + slides
+
+
 def update_job_in_dynamodb(job_id, output_key):
     """`job_id` を使って DynamoDB のジョブレコードを更新する。
 
@@ -94,7 +105,9 @@ def lambda_handler(event, context):
             s3.download_file(bucket, key, local_path)
             file_list.append(local_path)
 
-        # ffmpeg concat用ファイルを生成
+        # ffmpeg concat用ファイルを生成（slideshow を末尾に移動）
+        file_list = reorder_file_list(file_list, keyword="slideshow")
+        logger.info("Reordered file_list to move slideshow files to the end")
         concat_file = create_concat_file(file_list)
         logger.info(f"Created concat file: {concat_file}")
 
