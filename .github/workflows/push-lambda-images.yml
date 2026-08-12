@@ -1,0 +1,149 @@
+name: Build and push Lambda images
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "lambda/**"
+  workflow_dispatch:
+
+# OIDC で AWS のロールを引き受けるために必要な最小権限です。
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: lambda-image-push-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-northeast-1' }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed Lambda images
+        id: changes
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            base=true
+            formatter=true
+            merger=true
+            slideshow=true
+          else
+            if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+              changed_files=$(git ls-tree -r --name-only "$GITHUB_SHA" -- lambda)
+            else
+              changed_files=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" -- lambda)
+            fi
+
+            changed() {
+              grep -q "^$1/" <<< "$changed_files"
+            }
+
+            base=false
+            formatter=false
+            merger=false
+            slideshow=false
+            changed lambda/ffmpeg-image && base=true
+            changed lambda/format-video && formatter=true
+            changed lambda/merge-videos && merger=true
+            changed lambda/slideshow && slideshow=true
+
+            # 共通イメージの更新時は、それを利用する全 Lambda イメージを更新する。
+            if [ "$base" = true ]; then
+              formatter=true
+              merger=true
+              slideshow=true
+            fi
+          fi
+
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "formatter=$formatter" >> "$GITHUB_OUTPUT"
+          echo "merger=$merger" >> "$GITHUB_OUTPUT"
+          echo "slideshow=$slideshow" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Create required ECR repositories
+        env:
+          BASE_CHANGED: ${{ steps.changes.outputs.base }}
+          FORMATTER_CHANGED: ${{ steps.changes.outputs.formatter }}
+          MERGER_CHANGED: ${{ steps.changes.outputs.merger }}
+          SLIDESHOW_CHANGED: ${{ steps.changes.outputs.slideshow }}
+        run: |
+          set -euo pipefail
+
+          create_repository() {
+            aws ecr describe-repositories --repository-names "$1" >/dev/null 2>&1 || \
+              aws ecr create-repository --repository-name "$1" >/dev/null
+          }
+
+          [ "$BASE_CHANGED" = true ] && create_repository home-video/ffmpeg
+          [ "$FORMATTER_CHANGED" = true ] && create_repository home-video/formatter
+          [ "$MERGER_CHANGED" = true ] && create_repository home-video/merger
+          [ "$SLIDESHOW_CHANGED" = true ] && create_repository home-video/slideshow-maker
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push shared FFmpeg image
+        if: steps.changes.outputs.base == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: lambda/ffmpeg-image
+          platforms: linux/amd64
+          provenance: false
+          push: true
+          tags: |
+            ${{ steps.ecr-login.outputs.registry }}/home-video/ffmpeg:latest
+            ${{ steps.ecr-login.outputs.registry }}/home-video/ffmpeg:${{ github.sha }}
+
+      - name: Build and push Lambda images
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          FORMATTER_CHANGED: ${{ steps.changes.outputs.formatter }}
+          MERGER_CHANGED: ${{ steps.changes.outputs.merger }}
+          SLIDESHOW_CHANGED: ${{ steps.changes.outputs.slideshow }}
+        run: |
+          set -euo pipefail
+
+          build_and_push() {
+            local context="$1"
+            local repository="$2"
+
+            docker buildx build \
+              --platform linux/amd64 \
+              --build-context trip-tale-ffmpeg=docker-image://${ECR_REGISTRY}/home-video/ffmpeg:latest \
+              --provenance=false \
+              --tag "${ECR_REGISTRY}/${repository}:latest" \
+              --tag "${ECR_REGISTRY}/${repository}:${IMAGE_TAG}" \
+              --push \
+              "$context"
+          }
+
+          [ "$FORMATTER_CHANGED" = true ] && build_and_push lambda/format-video home-video/formatter
+          [ "$MERGER_CHANGED" = true ] && build_and_push lambda/merge-videos home-video/merger
+          [ "$SLIDESHOW_CHANGED" = true ] && build_and_push lambda/slideshow home-video/slideshow-maker

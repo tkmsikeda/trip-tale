@@ -1,11 +1,21 @@
 import json
-import subprocess
-import boto3
-import os
 import logging
+import os
+import subprocess
+
+import boto3
 from PIL import Image, ExifTags
 
 _s3_client = None
+
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+QUEUE_URL_FORMAT_VIDEO = os.environ.get("QUEUE_URL_FORMAT_VIDEO")
+
+DURATION_PER_IMAGE_SECONDS = 5
+FFMPEG_LIST_FILE = "/tmp/image_files.txt"
+OUTPUT_VIDEO = "/tmp/output.MOV"
+FINAL_VIDEO = "/tmp/image_audio_video.MOV"
 
 
 def get_s3_client():
@@ -17,16 +27,6 @@ def get_s3_client():
 
 def get_sqs_client():
     return boto3.client("sqs")
-
-
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-QUEUE_URL_FORMAT_VIDEO = os.environ.get("QUEUE_URL_FORMAT_VIDEO")
-
-DURATION_PER_IMAGE_SECONDS = 5
-FFMPEG_LIST_FILE = "/tmp/image_files.txt"
-OUTPUT_VIDEO = "/tmp/output.MOV"
-FINAL_VIDEO = "/tmp/image_audio_video.MOV"
 
 
 def build_output_key(job_id: str | None) -> str:
