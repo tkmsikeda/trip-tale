@@ -92,6 +92,8 @@ def lambda_handler(event, context):
         if not bucket:
             raise Exception("環境変数 BUCKET_NAME が設定されていません。")
 
+        final_bucket = os.environ.get("FINAL_BUCKET_NAME", "home-video-final")
+
         # バケット内の全ての動画ファイルを列挙して対象とする。
         formatted_keys = list_video_keys(bucket)
 
@@ -111,6 +113,8 @@ def lambda_handler(event, context):
         logger.info("Reordered file_list to move slideshow files to the end")
         concat_file = create_concat_file(file_list)
         logger.info(f"Created concat file: {concat_file}")
+        with open(concat_file, "r", encoding="utf-8") as f:
+            logger.info(f"concat_file contents:\n{f.read()}")
 
         # 動画を結合
         output_path = "/tmp/final_video.MOV"
@@ -128,11 +132,11 @@ def lambda_handler(event, context):
             logger.error(f"FFmpeg merge error: {result.stderr}")
             raise Exception(f"FFmpeg merge failed: {result.stderr}")
 
-        # S3にアップロード
+        # S3にアップロード（元の入力バケットとは別の出力バケットへ保存）
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
         output_key = f"output/final_video_{timestamp}.MOV"
-        logger.info(f"Uploading final video to S3: s3://{bucket}/{output_key}")
-        s3.upload_file(output_path, bucket, output_key)
+        logger.info(f"Uploading final video to S3: s3://{final_bucket}/{output_key}")
+        s3.upload_file(output_path, final_bucket, output_key)
 
         # SQSから送られてくる job_id を抽出し、DynamoDB 更新を呼び出す
         job_id = json.loads(event["Records"][0]["body"])["job_id"]
