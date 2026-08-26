@@ -100,10 +100,18 @@ jobs:
               aws ecr create-repository --repository-name "$1"
           }
 
-          [ "$BASE_CHANGED" = true ] && create_repository home-video/ffmpeg
-          [ "$FORMATTER_CHANGED" = true ] && create_repository home-video/formatter
-          [ "$MERGER_CHANGED" = true ] && create_repository home-video/merger
-          [ "$SLIDESHOW_CHANGED" = true ] && create_repository home-video/slideshow-maker
+          if [ "${BASE_CHANGED:-}" = true ]; then
+            create_repository home-video/ffmpeg
+          fi
+          if [ "${FORMATTER_CHANGED:-}" = true ]; then
+            create_repository home-video/formatter
+          fi
+          if [ "${MERGER_CHANGED:-}" = true ]; then
+            create_repository home-video/merger
+          fi
+          if [ "${SLIDESHOW_CHANGED:-}" = true ]; then
+            create_repository home-video/slideshow-maker
+          fi
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -144,6 +152,12 @@ jobs:
               "$context"
           }
 
-          [ "$FORMATTER_CHANGED" = true ] && build_and_push lambda/format-video home-video/formatter
-          [ "$MERGER_CHANGED" = true ] && build_and_push lambda/merge-videos home-video/merger
-          [ "$SLIDESHOW_CHANGED" = true ] && build_and_push lambda/slideshow home-video/slideshow-maker
+          if [ "${FORMATTER_CHANGED:-}" = true ]; then
+            build_and_push lambda/format-video home-video/formatter
+          fi
+          if [ "${MERGER_CHANGED:-}" = true ]; then
+            build_and_push lambda/merge-videos home-video/merger
+          fi
+          if [ "${SLIDESHOW_CHANGED:-}" = true ]; then
+            build_and_push lambda/slideshow home-video/slideshow-maker
+          fi
