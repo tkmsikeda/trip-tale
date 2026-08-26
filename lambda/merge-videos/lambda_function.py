@@ -23,6 +23,18 @@ def list_video_keys(bucket_name):
     return sorted(keys)
 
 
+def download_videos_from_s3(bucket_name, video_keys):
+    """S3上の動画ファイルを /tmp にダウンロードしてローカルパス一覧を返す。"""
+    downloaded_files = []
+    for i, key in enumerate(sorted(video_keys)):
+        file_name = os.path.basename(key)
+        local_path = f"/tmp/{i}_{file_name}"
+        logger.info(f"Downloading: {key}")
+        s3.download_file(bucket_name, key, local_path)
+        downloaded_files.append(local_path)
+    return downloaded_files
+
+
 def create_concat_file(file_list):
     """ffmpeg concat用ファイルを生成"""
     concat_path = "/tmp/concat_list.txt"
@@ -109,13 +121,7 @@ def lambda_handler(event, context):
         logger.info(f"Merging {len(formatted_keys)} videos from s3://{bucket}/")
 
         # 各動画をS3からダウンロード
-        file_list = []
-        for i, key in enumerate(sorted(formatted_keys)):
-            file_name = os.path.basename(key)
-            local_path = f"/tmp/{i}_{file_name}"
-            logger.info(f"Downloading: {key}")
-            s3.download_file(bucket, key, local_path)
-            file_list.append(local_path)
+        file_list = download_videos_from_s3(bucket, formatted_keys)
 
         # ffmpeg concat用ファイルを生成（slideshow を末尾に移動）
         file_list = reorder_file_list(file_list, keyword="slideshow")
