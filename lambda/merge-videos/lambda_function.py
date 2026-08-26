@@ -44,6 +44,14 @@ def reorder_file_list(file_list, keyword="slideshow"):
     return others + slides
 
 
+def log_sqs_message_details(event):
+    """SQSイベントの messageId と body をログ出力する。"""
+    for record in event.get("Records", []):
+        message_id = record.get("messageId")
+        body = record.get("body")
+        logger.info(f"Received SQS messageId={message_id}, body={body}")
+
+
 def update_job_in_dynamodb(job_id, output_key):
     """`job_id` を使って DynamoDB のジョブレコードを更新する。
 
@@ -87,6 +95,7 @@ def lambda_handler(event, context):
         }
     """
     try:
+        log_sqs_message_details(event)
 
         bucket = os.environ.get("BUCKET_NAME")
         if not bucket:
