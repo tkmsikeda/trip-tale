@@ -56,6 +56,22 @@ def reorder_file_list(file_list, keyword="slideshow"):
     return others + slides
 
 
+def prepare_concat_for_merge(file_list, keyword="slideshow"):
+    """Reorder `file_list` to move files whose basename contains `keyword` to the end,
+    generate an ffmpeg concat file, log relevant info, and return (file_list, concat_path).
+    """
+    file_list = reorder_file_list(file_list, keyword=keyword)
+    logger.info("Reordered file_list to move slideshow files to the end")
+    concat_path = create_concat_file(file_list)
+    logger.info(f"Created concat file: {concat_path}")
+    try:
+        with open(concat_path, "r", encoding="utf-8") as f:
+            logger.info(f"concat_file contents:\n{f.read()}")
+    except Exception as e:
+        logger.warning(f"Could not read concat file for logging: {e}")
+    return file_list, concat_path
+
+
 def log_sqs_message_details(event):
     """SQSイベントの messageId と body をログ出力する。"""
     for record in event.get("Records", []):
@@ -124,12 +140,7 @@ def lambda_handler(event, context):
         file_list = download_videos_from_s3(bucket, formatted_keys)
 
         # ffmpeg concat用ファイルを生成（slideshow を末尾に移動）
-        file_list = reorder_file_list(file_list, keyword="slideshow")
-        logger.info("Reordered file_list to move slideshow files to the end")
-        concat_file = create_concat_file(file_list)
-        logger.info(f"Created concat file: {concat_file}")
-        with open(concat_file, "r", encoding="utf-8") as f:
-            logger.info(f"concat_file contents:\n{f.read()}")
+        file_list, concat_file = prepare_concat_for_merge(file_list, keyword="slideshow")
 
         # 動画を結合
         output_path = "/tmp/final_video.MOV"
