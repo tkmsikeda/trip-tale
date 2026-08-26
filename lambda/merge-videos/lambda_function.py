@@ -3,6 +3,7 @@ import subprocess
 import boto3
 import os
 import logging
+from datetime import datetime, timezone
 
 s3 = boto3.client("s3")
 logger = logging.getLogger()
@@ -128,7 +129,8 @@ def lambda_handler(event, context):
             raise Exception(f"FFmpeg merge failed: {result.stderr}")
 
         # S3にアップロード
-        output_key = "output/final_video.MOV"
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        output_key = f"output/final_video_{timestamp}.MOV"
         logger.info(f"Uploading final video to S3: s3://{bucket}/{output_key}")
         s3.upload_file(output_path, bucket, output_key)
 
