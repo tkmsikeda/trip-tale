@@ -59,6 +59,28 @@ def list_s3_object_keys(bucket, prefix):
     return object_keys
 
 
+def filter_video_object_keys(object_keys):
+    """Filter a list of S3 object keys to include only video files by extension."""
+    video_exts = {
+        ".mp4",
+        ".mov",
+        ".mkv",
+        ".avi",
+        ".webm",
+        ".flv",
+        ".wmv",
+        ".mpeg",
+        ".mpg",
+        ".m4v",
+    }
+    filtered = [k for k in object_keys if os.path.splitext(k)[1].lower() in video_exts]
+    logger.info(
+        "Filtered object keys to videos",
+        extra={"before_count": len(object_keys), "after_count": len(filtered)},
+    )
+    return filtered
+
+
 def create_job_record(job_id, expected_count, audio_key=None):
     logger.info(
         "Creating DynamoDB job record",
@@ -140,16 +162,24 @@ def lambda_handler(_event, _context):
             )
             return {"statusCode": 200, "body": "No files."}
 
+        # 動画ファイルのみをフィルター
+        video_keys = filter_video_object_keys(object_keys)
+        if not video_keys:
+            logger.info(
+                "No video files found", extra={"bucket": bucket, "prefix": prefix}
+            )
+            return {"statusCode": 200, "body": "No video files."}
+
         job_id = str(uuid.uuid4())
-        object_count = len(object_keys)
+        object_count = len(video_keys)
         slideshow_audio_key = SLIDESHOW_AUDIO_KEY
 
         # DynamoDBにジョブの進捗状況を登録
         create_job_record(job_id, object_count, audio_key=slideshow_audio_key)
 
         # SQSにジョブを登録して、後続の前処理Lambdaを起動
-        enqueue_sqs_messages(job_id, bucket, object_keys)
         enqueue_slideshow_job(job_id, bucket, audio_key=slideshow_audio_key)
+        enqueue_sqs_messages(job_id, bucket, video_keys)
 
         logger.info(
             "Lambda handler completed successfully",
