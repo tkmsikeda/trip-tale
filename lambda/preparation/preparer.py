@@ -171,7 +171,7 @@ def lambda_handler(_event, _context):
             return {"statusCode": 200, "body": "No video files."}
 
         job_id = str(uuid.uuid4())
-        object_count = len(video_keys)
+        object_count = len(video_keys) + 1
         slideshow_audio_key = SLIDESHOW_AUDIO_KEY
 
         # DynamoDBにジョブの進捗状況を登録
