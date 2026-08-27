@@ -43,6 +43,7 @@ jobs:
             formatter=true
             merger=true
             slideshow=true
+            preparer=true
           else
             if [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
               changed_files=$(git ls-tree -r --name-only "$GITHUB_SHA" -- lambda)
@@ -58,10 +59,14 @@ jobs:
             formatter=false
             merger=false
             slideshow=false
+            preparer=false
             changed lambda/ffmpeg-image && base=true
             changed lambda/format-video && formatter=true
             changed lambda/merge-videos && merger=true
             changed lambda/slideshow && slideshow=true
+            if grep -qx "lambda/preparation/preparer.py" <<< "$changed_files"; then
+              preparer=true
+            fi
 
             # 共通イメージの更新時は、それを利用する全 Lambda イメージを更新する。
             if [ "$base" = true ]; then
@@ -75,12 +80,25 @@ jobs:
           echo "formatter=$formatter" >> "$GITHUB_OUTPUT"
           echo "merger=$merger" >> "$GITHUB_OUTPUT"
           echo "slideshow=$slideshow" >> "$GITHUB_OUTPUT"
+          echo "preparer=$preparer" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy video-preparer Lambda
+        if: steps.changes.outputs.preparer == 'true'
+        run: |
+          set -euo pipefail
+
+          cd lambda/preparation
+          zip -j "$RUNNER_TEMP/video-preparer.zip" preparer.py
+          aws lambda update-function-code \
+            --function-name video-preparer \
+            --zip-file "fileb://$RUNNER_TEMP/video-preparer.zip"
+          aws lambda wait function-updated-v2 --function-name video-preparer
 
       - name: Log in to Amazon ECR
         id: ecr-login
