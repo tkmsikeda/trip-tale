@@ -34,8 +34,34 @@ except Exception:
     dynamodb = None
     dynamodb_table = None
 
+
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        for attr in (
+            "bucket",
+            "prefix",
+            "count",
+            "before_count",
+            "after_count",
+            "job_id",
+            "expected_count",
+            "file_count",
+            "message_count",
+            "queue_url",
+            "audio_key",
+        ):
+            if not hasattr(record, attr):
+                setattr(record, attr, "-")
+        return super().format(record)
+
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    fmt = "%(asctime)s %(levelname)s %(name)s bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s %(message)s"
+    handler.setFormatter(SafeFormatter(fmt))
+    logger.addHandler(handler)
 
 
 def list_s3_object_keys(bucket, prefix):
@@ -171,6 +197,7 @@ def lambda_handler(_event, _context):
             return {"statusCode": 200, "body": "No video files."}
 
         job_id = str(uuid.uuid4())
+        # 通常の動画＋スライドショーの数1
         object_count = len(video_keys) + 1
         slideshow_audio_key = SLIDESHOW_AUDIO_KEY
 
