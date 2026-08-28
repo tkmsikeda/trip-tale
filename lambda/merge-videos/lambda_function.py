@@ -10,6 +10,39 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        for attr in (
+            "bucket",
+            "prefix",
+            "job_id",
+            "output_key",
+            "message_id",
+        ):
+            if not hasattr(record, attr):
+                setattr(record, attr, "-")
+        return super().format(record)
+
+
+fmt = (
+    "%(asctime)s %(levelname)s %(name)s "
+    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
+    "message_id=%(message_id)s %(message)s"
+)
+
+# Lambda may provide a handler with a formatter that expects extra fields.
+if logger.handlers:
+    for handler in logger.handlers:
+        try:
+            handler.setFormatter(SafeFormatter(fmt))
+        except Exception:
+            pass
+else:
+    handler = logging.StreamHandler()
+    handler.setFormatter(SafeFormatter(fmt))
+    logger.addHandler(handler)
+
+
 def list_video_keys(bucket_name):
     paginator = s3.get_paginator("list_objects_v2")
     page_iterator = paginator.paginate(Bucket=bucket_name)
@@ -77,7 +110,11 @@ def log_sqs_message_details(event):
     for record in event.get("Records", []):
         message_id = record.get("messageId")
         body = record.get("body")
-        logger.info(f"Received SQS messageId={message_id}, body={body}")
+        logger.info(
+            "Received SQS message",
+            extra={"message_id": message_id},
+        )
+        logger.info("SQS message body: %s", body)
 
 
 def update_job_in_dynamodb(job_id, output_key):
@@ -134,13 +171,19 @@ def lambda_handler(event, context):
         # バケット内の全ての動画ファイルを列挙して対象とする。
         formatted_keys = list_video_keys(bucket)
 
-        logger.info(f"Merging {len(formatted_keys)} videos from s3://{bucket}/")
+        logger.info(
+            "Merging %d videos from S3",
+            len(formatted_keys),
+            extra={"bucket": bucket},
+        )
 
         # 各動画をS3からダウンロード
         file_list = download_videos_from_s3(bucket, formatted_keys)
 
         # ffmpeg concat用ファイルを生成（slideshow を末尾に移動）
-        file_list, concat_file = prepare_concat_for_merge(file_list, keyword="slideshow")
+        file_list, concat_file = prepare_concat_for_merge(
+            file_list, keyword="slideshow"
+        )
 
         # 動画を結合
         output_path = "/tmp/final_video.MOV"

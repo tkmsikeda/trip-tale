@@ -22,6 +22,47 @@ logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
 
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        for attr in (
+            "bucket",
+            "prefix",
+            "count",
+            "before_count",
+            "after_count",
+            "job_id",
+            "expected_count",
+            "completed_count",
+            "file_count",
+            "message_count",
+            "queue_url",
+            "audio_key",
+        ):
+            if not hasattr(record, attr):
+                setattr(record, attr, "-")
+        return super().format(record)
+
+
+fmt = (
+    "%(asctime)s %(levelname)s %(name)s "
+    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
+    "completed_count=%(completed_count)s expected_count=%(expected_count)s "
+    "%(message)s"
+)
+
+# Lambda may provide a handler with a formatter that expects extra fields.
+if logger.handlers:
+    for handler in logger.handlers:
+        try:
+            handler.setFormatter(SafeFormatter(fmt))
+        except Exception:
+            pass
+else:
+    handler = logging.StreamHandler()
+    handler.setFormatter(SafeFormatter(fmt))
+    logger.addHandler(handler)
+
+
 def extract_job_info(event):
     """SQSイベントからjob_id, bucket, keyを取得する"""
     if not event.get("Records"):
