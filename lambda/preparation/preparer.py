@@ -57,9 +57,18 @@ class SafeFormatter(logging.Formatter):
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
-if not logger.handlers:
+fmt = "%(asctime)s %(levelname)s %(name)s bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s %(message)s"
+
+# Apply SafeFormatter to existing handlers if present; otherwise add a StreamHandler
+if logger.handlers:
+    for h in logger.handlers:
+        try:
+            h.setFormatter(SafeFormatter(fmt))
+        except Exception:
+            # ignore handlers that can't be formatted
+            pass
+else:
     handler = logging.StreamHandler()
-    fmt = "%(asctime)s %(levelname)s %(name)s bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s %(message)s"
     handler.setFormatter(SafeFormatter(fmt))
     logger.addHandler(handler)
 
