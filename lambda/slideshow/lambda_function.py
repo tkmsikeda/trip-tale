@@ -10,6 +10,51 @@ _s3_client = None
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        for attr in (
+            "bucket",
+            "prefix",
+            "count",
+            "before_count",
+            "after_count",
+            "job_id",
+            "expected_count",
+            "completed_count",
+            "file_count",
+            "message_count",
+            "queue_url",
+            "audio_key",
+            "key",
+            "output_key",
+        ):
+            if not hasattr(record, attr):
+                setattr(record, attr, "-")
+        return super().format(record)
+
+
+fmt = (
+    "%(asctime)s %(levelname)s %(name)s "
+    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
+    "key=%(key)s audio_key=%(audio_key)s output_key=%(output_key)s "
+    "%(message)s"
+)
+
+# Lambda may provide a handler with a formatter that expects extra fields.
+if logger.handlers:
+    for handler in logger.handlers:
+        try:
+            handler.setFormatter(SafeFormatter(fmt))
+        except Exception:
+            pass
+else:
+    handler = logging.StreamHandler()
+    handler.setFormatter(SafeFormatter(fmt))
+    logger.addHandler(handler)
+
+
 QUEUE_URL_FORMAT_VIDEO = os.environ.get("QUEUE_URL_FORMAT_VIDEO")
 
 DURATION_PER_IMAGE_SECONDS = 5
