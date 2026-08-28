@@ -6,41 +6,8 @@ import logging
 from datetime import datetime, timezone
 
 s3 = boto3.client("s3")
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-class SafeFormatter(logging.Formatter):
-    def format(self, record):
-        for attr in (
-            "bucket",
-            "prefix",
-            "job_id",
-            "output_key",
-            "message_id",
-        ):
-            if not hasattr(record, attr):
-                setattr(record, attr, "-")
-        return super().format(record)
-
-
-fmt = (
-    "%(asctime)s %(levelname)s %(name)s "
-    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
-    "message_id=%(message_id)s %(message)s"
-)
-
-# Lambda may provide a handler with a formatter that expects extra fields.
-if logger.handlers:
-    for handler in logger.handlers:
-        try:
-            handler.setFormatter(SafeFormatter(fmt))
-        except Exception:
-            pass
-else:
-    handler = logging.StreamHandler()
-    handler.setFormatter(SafeFormatter(fmt))
-    logger.addHandler(handler)
 
 
 def list_video_keys(bucket_name):
@@ -110,10 +77,7 @@ def log_sqs_message_details(event):
     for record in event.get("Records", []):
         message_id = record.get("messageId")
         body = record.get("body")
-        logger.info(
-            "Received SQS message",
-            extra={"message_id": message_id},
-        )
+        logger.info("Received SQS message. message_id=%s", message_id)
         logger.info("SQS message body: %s", body)
 
 
@@ -172,9 +136,9 @@ def lambda_handler(event, context):
         formatted_keys = list_video_keys(bucket)
 
         logger.info(
-            "Merging %d videos from S3",
+            "Merging %d videos from S3. bucket=%s",
             len(formatted_keys),
-            extra={"bucket": bucket},
+            bucket,
         )
 
         # 各動画をS3からダウンロード

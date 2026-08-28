@@ -18,49 +18,8 @@ if TABLE_NAME:
 else:
     dynamodb_table = None
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-class SafeFormatter(logging.Formatter):
-    def format(self, record):
-        for attr in (
-            "bucket",
-            "prefix",
-            "count",
-            "before_count",
-            "after_count",
-            "job_id",
-            "expected_count",
-            "completed_count",
-            "file_count",
-            "message_count",
-            "queue_url",
-            "audio_key",
-        ):
-            if not hasattr(record, attr):
-                setattr(record, attr, "-")
-        return super().format(record)
-
-
-fmt = (
-    "%(asctime)s %(levelname)s %(name)s "
-    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
-    "completed_count=%(completed_count)s expected_count=%(expected_count)s "
-    "%(message)s"
-)
-
-# Lambda may provide a handler with a formatter that expects extra fields.
-if logger.handlers:
-    for handler in logger.handlers:
-        try:
-            handler.setFormatter(SafeFormatter(fmt))
-        except Exception:
-            pass
-else:
-    handler = logging.StreamHandler()
-    handler.setFormatter(SafeFormatter(fmt))
-    logger.addHandler(handler)
 
 
 def extract_job_info(event):
@@ -215,12 +174,10 @@ def update_job_progress(job_id):
 
     updated_item = response.get("Attributes", {})
     logger.info(
-        "Job progress updated",
-        extra={
-            "job_id": job_id,
-            "completed_count": updated_item.get("completed_count"),
-            "expected_count": updated_item.get("expected_count"),
-        },
+        "Job progress updated. job_id=%s completed_count=%s expected_count=%s",
+        job_id,
+        updated_item.get("completed_count"),
+        updated_item.get("expected_count"),
     )
 
     return updated_item
@@ -249,12 +206,10 @@ def check_and_finalize_job(job_id):
     completed_count = job_item.get("completed_count", 0)
 
     logger.info(
-        "Job completion status",
-        extra={
-            "job_id": job_id,
-            "completed_count": completed_count,
-            "expected_count": expected_count,
-        },
+        "Job completion status. job_id=%s completed_count=%s expected_count=%s",
+        job_id,
+        completed_count,
+        expected_count,
     )
 
     # すべて完了したかチェック

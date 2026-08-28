@@ -8,51 +8,8 @@ from PIL import Image, ExifTags
 
 _s3_client = None
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-
-
-class SafeFormatter(logging.Formatter):
-    def format(self, record):
-        for attr in (
-            "bucket",
-            "prefix",
-            "count",
-            "before_count",
-            "after_count",
-            "job_id",
-            "expected_count",
-            "completed_count",
-            "file_count",
-            "message_count",
-            "queue_url",
-            "audio_key",
-            "key",
-            "output_key",
-        ):
-            if not hasattr(record, attr):
-                setattr(record, attr, "-")
-        return super().format(record)
-
-
-fmt = (
-    "%(asctime)s %(levelname)s %(name)s "
-    "bucket=%(bucket)s prefix=%(prefix)s job_id=%(job_id)s "
-    "key=%(key)s audio_key=%(audio_key)s output_key=%(output_key)s "
-    "%(message)s"
-)
-
-# Lambda may provide a handler with a formatter that expects extra fields.
-if logger.handlers:
-    for handler in logger.handlers:
-        try:
-            handler.setFormatter(SafeFormatter(fmt))
-        except Exception:
-            pass
-else:
-    handler = logging.StreamHandler()
-    handler.setFormatter(SafeFormatter(fmt))
-    logger.addHandler(handler)
 
 
 QUEUE_URL_FORMAT_VIDEO = os.environ.get("QUEUE_URL_FORMAT_VIDEO")
@@ -281,16 +238,14 @@ def enqueue_format_video_job(job_id: str, bucket: str, key: str):
     sqs = get_sqs_client()
     message = {"job_id": job_id, "bucket": bucket, "key": key}
     logger.info(
-        "Sending format-video job to SQS",
-        extra={
-            "queue_url": QUEUE_URL_FORMAT_VIDEO,
-            "job_id": job_id,
-            "bucket": bucket,
-            "key": key,
-        },
+        "Sending format-video job to SQS. queue_url=%s job_id=%s bucket=%s key=%s",
+        QUEUE_URL_FORMAT_VIDEO,
+        job_id,
+        bucket,
+        key,
     )
     sqs.send_message(QueueUrl=QUEUE_URL_FORMAT_VIDEO, MessageBody=json.dumps(message))
-    logger.info("Format-video job enqueued successfully", extra={"job_id": job_id})
+    logger.info("Format-video job enqueued successfully. job_id=%s", job_id)
 
 
 def lambda_handler(event, context):
