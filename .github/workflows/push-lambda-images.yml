@@ -60,10 +60,14 @@ jobs:
             merger=false
             slideshow=false
             preparer=false
+            orchestrator=false
+            worker=false
             changed lambda/ffmpeg-image && base=true
             changed lambda/format-video && formatter=true
             changed lambda/merge-videos && merger=true
             changed lambda/slideshow && slideshow=true
+            changed lambda/mitene-orchestrator && orchestrator=true
+            changed lambda/mitene-worker && worker=true
             if grep -qx "lambda/preparation/preparer.py" <<< "$changed_files"; then
               preparer=true
             fi
@@ -81,6 +85,8 @@ jobs:
           echo "merger=$merger" >> "$GITHUB_OUTPUT"
           echo "slideshow=$slideshow" >> "$GITHUB_OUTPUT"
           echo "preparer=$preparer" >> "$GITHUB_OUTPUT"
+          echo "orchestrator=$orchestrator" >> "$GITHUB_OUTPUT"
+          echo "worker=$worker" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -99,6 +105,32 @@ jobs:
             --function-name video-preparer \
             --zip-file "fileb://$RUNNER_TEMP/video-preparer.zip"
           aws lambda wait function-updated-v2 --function-name video-preparer
+
+      - name: Deploy mitene-orchestrator Lambda
+        if: steps.changes.outputs.orchestrator == 'true'
+        run: |
+          set -euo pipefail
+
+          cd lambda/mitene-orchestrator
+          zip -j "$RUNNER_TEMP/mitene-orchestrator.zip" lambda_function.py
+          zip -r "$RUNNER_TEMP/mitene-orchestrator.zip" -i '*.py' .
+          aws lambda update-function-code \
+            --function-name mitene-orchestrator \
+            --zip-file "fileb://$RUNNER_TEMP/mitene-orchestrator.zip"
+          aws lambda wait function-updated-v2 --function-name mitene-orchestrator
+
+      - name: Deploy mitene-worker Lambda
+        if: steps.changes.outputs.worker == 'true'
+        run: |
+          set -euo pipefail
+
+          cd lambda/mitene-worker
+          zip -j "$RUNNER_TEMP/mitene-worker.zip" lambda_function.py
+          zip -r "$RUNNER_TEMP/mitene-worker.zip" -i '*.py' .
+          aws lambda update-function-code \
+            --function-name mitene-worker \
+            --zip-file "fileb://$RUNNER_TEMP/mitene-worker.zip"
+          aws lambda wait function-updated-v2 --function-name mitene-worker
 
       - name: Log in to Amazon ECR
         id: ecr-login
