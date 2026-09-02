@@ -239,7 +239,8 @@ def lambda_handler(event, context):
         logger.info("Environment variables check:")
         logger.info(f"  MITENE_ALBUM_URL: {'SET' if album_url else 'NOT SET'}")
         logger.info(f"  SQS_QUEUE_URL: {'SET' if queue_url else 'NOT SET'}")
-        logger.info(f"  MITENE_ALBUM_PASSWORD: {'SET' if password else 'NOT SET'}")
+        pwd_status = "SET" if password else "NOT SET"
+        logger.info(f"  MITENE_ALBUM_PASSWORD: {pwd_status}")
         logger.info(f"  END_PAGE: {end_page}")
 
         if not album_url:

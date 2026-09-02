@@ -224,7 +224,7 @@ def lambda_handler(event, context):
         if not s3_bucket:
             raise ValueError("S3_BUCKET_NAME is not set")
 
-        # SQSメッセージは batch_size=1 のため必ず1件
+        # SQSメッセージから抽出
         logger.debug(f"SQS event records count: {len(event['Records'])}")
         record = event["Records"][0]
         message_body = json.loads(record["body"])
