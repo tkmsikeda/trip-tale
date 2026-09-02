@@ -130,6 +130,55 @@ jobs:
             --zip-file "fileb://$RUNNER_TEMP/mitene-worker.zip"
           aws lambda wait function-updated-v2 --function-name mitene-worker
 
+      - name: Build and deploy Lambda Layer
+        if: steps.changes.outputs.orchestrator == 'true' || steps.changes.outputs.worker == 'true'
+        run: |
+          set -euo pipefail
+
+          LAYER_NAME="mitene-dependencies"
+          PYTHON_VERSION="3.13"
+          LAYER_DIR="$RUNNER_TEMP/python/lib/python${PYTHON_VERSION}/site-packages"
+
+          # Layer ディレクトリを作成
+          mkdir -p "$LAYER_DIR"
+
+          # 依存パッケージをインストール
+          echo "Building Lambda Layer: $LAYER_NAME"
+          pip install -r lambda/mitene-orchestrator/requirements.txt -t "$LAYER_DIR"
+
+          # zip ファイルを作成
+          cd "$RUNNER_TEMP"
+          zip -r layer-$LAYER_NAME.zip python/
+
+          echo "Publishing Lambda Layer to AWS..."
+          # Layer をパブリッシュ
+          LAYER_VERSION=$(aws lambda publish-layer-version \
+            --layer-name $LAYER_NAME \
+            --zip-file "fileb://$RUNNER_TEMP/layer-$LAYER_NAME.zip" \
+            --compatible-runtimes python$PYTHON_VERSION \
+            --query 'Version' \
+            --output text)
+
+          LAYER_ARN="arn:aws:lambda:$AWS_REGION:$(aws sts get-caller-identity --query Account --output text):layer:$LAYER_NAME:$LAYER_VERSION"
+          echo "Layer published: $LAYER_ARN"
+
+          # Lambda 関数に Layer を紐付け
+          if [ "${{ steps.changes.outputs.orchestrator }}" = true ]; then
+            echo "Updating mitene-orchestrator with new Layer..."
+            aws lambda update-function-configuration \
+              --function-name mitene-orchestrator \
+              --layers "$LAYER_ARN"
+            aws lambda wait function-updated-v2 --function-name mitene-orchestrator
+          fi
+
+          if [ "${{ steps.changes.outputs.worker }}" = true ]; then
+            echo "Updating mitene-worker with new Layer..."
+            aws lambda update-function-configuration \
+              --function-name mitene-worker \
+              --layers "$LAYER_ARN"
+            aws lambda wait function-updated-v2 --function-name mitene-worker
+          fi
+
       - name: Log in to Amazon ECR
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
