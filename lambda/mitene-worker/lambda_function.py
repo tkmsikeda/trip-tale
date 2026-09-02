@@ -10,7 +10,8 @@ import requests
 from datetime import datetime
 
 logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+logger.setLevel(log_level)
 
 s3 = boto3.client("s3")
 
@@ -98,7 +99,9 @@ def _fetch_album_page(page_url: str, password: str | None = None) -> BeautifulSo
         requests.exceptions.HTTPError: HTTPリクエスト失敗時
     """
     params = {"password": password} if password else {}
+    logger.debug(f"Fetching album page: {page_url}")
     response = requests.get(page_url, params=params)
+    logger.debug(f"HTTP status: {response.status_code}")
     response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
 
@@ -118,8 +121,11 @@ def _extract_album_data(soup: BeautifulSoup) -> dict:
     """
     json_string = _find_gon_media_script_text(soup)
     if not json_string:
+        logger.error("Could not find gon.media in script tags")
         raise Exception("Could not find JavaScript variable 'gon'")
-    return json.loads(json_string)
+    data = json.loads(json_string)
+    logger.debug(f"Extracted album data: {len(data.get('mediaFiles', []))} media files")
+    return data
 
 
 def _download_media_files_to_s3(
@@ -201,36 +207,56 @@ def lambda_handler(event, context):
     Returns:
         dict: Lambda実行結果
     """
+    timestamp = datetime.now().isoformat()
+    logger.info(f"[mitene-worker] Starting Lambda handler at {timestamp}")
+
     try:
+        # 環境変数を取得
         s3_bucket = os.getenv("S3_BUCKET_NAME")
         album_password = os.getenv("MITENE_ALBUM_PASSWORD")
+
+        # 環境変数の検証
+        logger.info("Environment variables check:")
+        logger.info(f"  S3_BUCKET_NAME: {'SET' if s3_bucket else 'NOT SET'}")
+        pwd_status = "SET" if album_password else "NOT SET"
+        logger.info(f"  MITENE_ALBUM_PASSWORD: {pwd_status}")
 
         if not s3_bucket:
             raise ValueError("S3_BUCKET_NAME is not set")
 
         # SQSメッセージは batch_size=1 のため必ず1件
+        logger.debug(f"SQS event records count: {len(event['Records'])}")
         record = event["Records"][0]
         message_body = json.loads(record["body"])
         album_url = message_body["album_url"]
         page = message_body["page"]
         base_url = message_body["base_url"]
 
-        logger.info(f"Processing page {page} from {album_url}")
+        logger.info(f"[Step 1/2] Fetching page {page} from album...")
+        logger.debug(f"  album_url: {album_url}")
+        logger.debug(f"  page: {page}")
+        logger.debug(f"  base_url: {base_url}")
 
         # ページをスクレイプ（パスワード認証対応）
         page_url = f"{album_url}?page={page}"
         album_page_soup = _fetch_album_page(page_url, password=album_password)
         album_data = _extract_album_data(album_page_soup)
+        logger.info("[Step 1/2] ✓ Page fetched and parsed")
 
         # メディアをダウンロードしてS3に保存
+        logger.info("[Step 2/2] Downloading media files to S3...")
         results = _download_media_files_to_s3(
             album_data,
             base_url,
             s3_bucket,
             s3_prefix=f"mitene-download/page-{page}",
         )
+        logger.info("[Step 2/2] ✓ Media processing complete")
 
-        logger.info(f"Page {page} completed: {results}")
+        logger.info(
+            f"[SUCCESS] Page {page} completed: "
+            f"{results['success']} success, {results['failed']} failed"
+        )
 
         return {
             "statusCode": 200,
@@ -244,8 +270,8 @@ def lambda_handler(event, context):
         }
 
     except json.JSONDecodeError as e:
-        logger.error(f"Failed to parse SQS message: {str(e)}", exc_info=True)
+        logger.error(f"[FAILED] Failed to parse SQS message: {str(e)}", exc_info=True)
         raise
     except Exception as e:
-        logger.error(f"Error in worker: {str(e)}", exc_info=True)
+        logger.error(f"[FAILED] Error in worker: {str(e)}", exc_info=True)
         raise
