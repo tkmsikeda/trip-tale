@@ -112,8 +112,7 @@ jobs:
           set -euo pipefail
 
           cd lambda/mitene-orchestrator
-          zip -j "$RUNNER_TEMP/mitene-orchestrator.zip" lambda_function.py
-          zip -r "$RUNNER_TEMP/mitene-orchestrator.zip" -i '*.py' .
+          zip "$RUNNER_TEMP/mitene-orchestrator.zip" lambda_function.py requirements.txt
           aws lambda update-function-code \
             --function-name mitene-orchestrator \
             --zip-file "fileb://$RUNNER_TEMP/mitene-orchestrator.zip"
@@ -125,8 +124,7 @@ jobs:
           set -euo pipefail
 
           cd lambda/mitene-worker
-          zip -j "$RUNNER_TEMP/mitene-worker.zip" lambda_function.py
-          zip -r "$RUNNER_TEMP/mitene-worker.zip" -i '*.py' .
+          zip "$RUNNER_TEMP/mitene-worker.zip" lambda_function.py requirements.txt
           aws lambda update-function-code \
             --function-name mitene-worker \
             --zip-file "fileb://$RUNNER_TEMP/mitene-worker.zip"
