@@ -1,8 +1,9 @@
 import json
+import logging
 import os
 import re
 import time
-import logging
+
 import boto3
 from bs4 import BeautifulSoup
 import requests

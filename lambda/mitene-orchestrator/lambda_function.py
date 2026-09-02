@@ -1,7 +1,8 @@
 import json
+import logging
 import os
 import re
-import logging
+
 import boto3
 from bs4 import BeautifulSoup
 import requests
@@ -15,15 +16,15 @@ sqs = boto3.client("sqs")
 
 def _fetch_album_page(page_url: str, password: str | None = None) -> BeautifulSoup:
     """アルバムページのHTMLを取得して、BeautifulSoupオブジェクトを返す
-    
+
     Args:
         page_url (str): アルバムページのURL
         password (str | None): みてねアルバムのパスワード（オプション）
                                未指定の場合はパスワード不要のアルバムとして処理
-    
+
     Returns:
         BeautifulSoup: パースされたHTMLオブジェクト
-    
+
     Raises:
         requests.exceptions.HTTPError: HTTPリクエスト失敗時
     """
@@ -35,10 +36,10 @@ def _fetch_album_page(page_url: str, password: str | None = None) -> BeautifulSo
 
 def _find_gon_media_script_text(soup: BeautifulSoup) -> str | None:
     """JavaScript の gon.media オブジェクトを抽出
-    
+
     Args:
         soup (BeautifulSoup): HTMLパース済みオブジェクト
-    
+
     Returns:
         str | None: gon.media オブジェクトのJSON文字列
                     見つからない場合は None
@@ -70,14 +71,14 @@ def _find_gon_media_script_text(soup: BeautifulSoup) -> str | None:
 
 def _extract_album_data(soup: BeautifulSoup) -> dict:
     """アルバムページから、メディアダウンロードに必要なデータを抽出する
-    
+
     Args:
         soup (BeautifulSoup): HTMLパース済みオブジェクト
-    
+
     Returns:
         dict: gon.media オブジェクトのパース済み辞書
               mediaFiles, hasNext, 等のキーを含む
-    
+
     Raises:
         Exception: gon.media が見つからない場合
     """
@@ -87,17 +88,19 @@ def _extract_album_data(soup: BeautifulSoup) -> dict:
     return json.loads(json_string)
 
 
-def _get_total_pages(album_url: str, end_page: int | None = None, password: str | None = None) -> int:
+def _get_total_pages(
+    album_url: str, end_page: int | None = None, password: str | None = None
+) -> int:
     """総ページ数を取得する
-    
+
     Args:
         album_url (str): アルバムのベースURL
         end_page (int | None): 終了ページ（指定時は処理対象の上限）
         password (str | None): みてねアルバムのパスワード（オプション）
-    
+
     Returns:
         int: アルバムの総ページ数
-    
+
     Raises:
         Exception: gon.media が見つからない場合
     """
@@ -126,17 +129,17 @@ def _get_total_pages(album_url: str, end_page: int | None = None, password: str 
 def _create_page_messages(album_url: str, total_pages: int) -> list:
     """
     Orchestrator: total_pages分の独立したSQSメッセージを生成
-    
+
     各メッセージは1ページのダウンロード処理に対応
-    
+
     Args:
         album_url (str): アルバムのURL
         total_pages (int): 生成対象のページ数
-    
+
     Returns:
         list: SQS send_message_batch 用のメッセージエントリリスト
               各エントリは {"Id": str, "MessageBody": json_str} 形式
-    
+
     例: total_pages=12 の場合
       - Message 1: {"page": 1, "album_url": "..."}
       - Message 2: {"page": 2, "album_url": "..."}
@@ -165,15 +168,15 @@ def _create_page_messages(album_url: str, total_pages: int) -> list:
 
 def _send_messages_to_sqs(queue_url: str, album_url: str, total_pages: int) -> None:
     """SQS キューにページ情報を送信する
-    
+
     Args:
         queue_url (str): SQSキューのURL
         album_url (str): アルバムのURL
         total_pages (int): 送信対象のページ数
-    
+
     Returns:
         None
-    
+
     Raises:
         Exception: SQSメッセージ送信失敗時
     """
@@ -199,13 +202,13 @@ def lambda_handler(event, context):
     オーケストレータLambda
     - アルバムURLからページ数を取得
     - SQSキューにメッセージを送信
-    
+
     環境変数:
         MITENE_ALBUM_URL (str): みてねアルバムのURL（必須）
         SQS_QUEUE_URL (str): SQSキューのURL（必須）
         MITENE_ALBUM_PASSWORD (str): アルバムがパスワード保護の場合のパスワード（オプション）
         END_PAGE (int): 処理対象の終了ページ（オプション、デフォルト: 全ページ）
-    
+
     Returns:
         dict: Lambda実行結果
     """
