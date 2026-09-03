@@ -135,7 +135,12 @@ def _get_total_pages(
     return total_pages
 
 
-def _create_page_messages(album_url: str, total_pages: int) -> list:
+def _create_page_messages(
+    album_url: str,
+    total_pages: int,
+    target_start_at: str,
+    target_end_at: str,
+) -> list:
     """
     Orchestrator: total_pages分の独立したSQSメッセージを生成
 
@@ -144,6 +149,8 @@ def _create_page_messages(album_url: str, total_pages: int) -> list:
     Args:
         album_url (str): アルバムのURL
         total_pages (int): 生成対象のページ数
+        target_start_at (str): 対象期間の開始日時（ISO 8601形式）
+        target_end_at (str): 対象期間の終了日時（ISO 8601形式、排他的）
 
     Returns:
         list: SQS send_message_batch 用のメッセージエントリリスト
@@ -162,6 +169,8 @@ def _create_page_messages(album_url: str, total_pages: int) -> list:
             "album_url": album_url,
             "page": page,
             "base_url": album_url,
+            "target_start_at": target_start_at,
+            "target_end_at": target_end_at,
         }
 
         entries.append(
@@ -175,13 +184,21 @@ def _create_page_messages(album_url: str, total_pages: int) -> list:
     return entries
 
 
-def _send_messages_to_sqs(queue_url: str, album_url: str, total_pages: int) -> None:
+def _send_messages_to_sqs(
+    queue_url: str,
+    album_url: str,
+    total_pages: int,
+    target_start_at: str,
+    target_end_at: str,
+) -> None:
     """SQS キューにページ情報を送信する
 
     Args:
         queue_url (str): SQSキューのURL
         album_url (str): アルバムのURL
         total_pages (int): 送信対象のページ数
+        target_start_at (str): 対象期間の開始日時（ISO 8601形式）
+        target_end_at (str): 対象期間の終了日時（ISO 8601形式、排他的）
 
     Returns:
         None
@@ -191,7 +208,9 @@ def _send_messages_to_sqs(queue_url: str, album_url: str, total_pages: int) -> N
     """
     # total_pages分の独立したメッセージを生成（1メッセージ = 1ページ）
     logger.info(f"Sending messages to SQS queue: {queue_url}")
-    entries = _create_page_messages(album_url, total_pages)
+    entries = _create_page_messages(
+        album_url, total_pages, target_start_at, target_end_at
+    )
 
     # SQS API の制限により最大10個ずつに分割して送信
     for i in range(0, len(entries), 10):
@@ -221,6 +240,8 @@ def lambda_handler(event, context):
         SQS_QUEUE_URL (str): SQSキューのURL（必須）
         MITENE_ALBUM_PASSWORD (str): アルバムパスワード（オプション）
         END_PAGE (int): 処理対象の終了ページ（デフォルト: 全ページ）
+        TARGET_START_AT (str): 対象期間の開始日時（ISO 8601形式、必須）
+        TARGET_END_AT (str): 対象期間の終了日時（ISO 8601形式、排他的、必須）
 
     Returns:
         dict: Lambda実行結果
@@ -234,6 +255,8 @@ def lambda_handler(event, context):
         queue_url = os.getenv("SQS_QUEUE_URL")
         password = os.getenv("MITENE_ALBUM_PASSWORD")
         end_page = int(os.getenv("END_PAGE", "0")) or None
+        target_start_at = os.getenv("TARGET_START_AT")
+        target_end_at = os.getenv("TARGET_END_AT")
 
         # 環境変数の検証
         logger.info("Environment variables check:")
@@ -242,11 +265,26 @@ def lambda_handler(event, context):
         pwd_status = "SET" if password else "NOT SET"
         logger.info(f"  MITENE_ALBUM_PASSWORD: {pwd_status}")
         logger.info(f"  END_PAGE: {end_page}")
+        logger.info(f"  TARGET_START_AT: {'SET' if target_start_at else 'NOT SET'}")
+        logger.info(f"  TARGET_END_AT: {'SET' if target_end_at else 'NOT SET'}")
 
         if not album_url:
             raise ValueError("MITENE_ALBUM_URL is not set")
         if not queue_url:
             raise ValueError("SQS_QUEUE_URL is not set")
+        if not target_start_at:
+            raise ValueError("TARGET_START_AT is not set")
+        if not target_end_at:
+            raise ValueError("TARGET_END_AT is not set")
+
+        start_datetime = datetime.fromisoformat(
+            target_start_at.replace("Z", "+00:00")
+        )
+        end_datetime = datetime.fromisoformat(target_end_at.replace("Z", "+00:00"))
+        if start_datetime.tzinfo is None or end_datetime.tzinfo is None:
+            raise ValueError("Target period must include a timezone")
+        if start_datetime >= end_datetime:
+            raise ValueError("TARGET_START_AT must be before TARGET_END_AT")
 
         logger.info(f"[Step 1/2] Starting orchestration for album: {album_url}")
 
@@ -256,7 +294,13 @@ def lambda_handler(event, context):
 
         # SQSにメッセージを送信
         logger.info(f"[Step 2/2] Sending {total_pages} messages to SQS...")
-        _send_messages_to_sqs(queue_url, album_url, total_pages)
+        _send_messages_to_sqs(
+            queue_url,
+            album_url,
+            total_pages,
+            target_start_at,
+            target_end_at,
+        )
         logger.info("[Step 2/2] ✓ All messages sent to SQS")
 
         logger.info(f"[SUCCESS] Orchestration completed. Total pages: {total_pages}")

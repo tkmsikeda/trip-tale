@@ -3,6 +3,7 @@ import logging
 import os
 import re
 import time
+from typing import Any
 
 import boto3
 from bs4 import BeautifulSoup
@@ -31,6 +32,17 @@ def _make_filename(media_file: dict) -> str:
     timestamp_str = captured_at_datetime.strftime("%Y%m%d%H%M%S")
     extension = media_file["contentType"].split("/")[-1]
     return f"{timestamp_str}.{extension}"
+
+
+def _is_within_target_period(
+    media_file: dict, target_start_at: datetime, target_end_at: datetime
+) -> bool:
+    """メディアの撮影日時が対象期間内か判定する。
+
+    対象期間は開始日時を含み、終了日時を含まない。
+    """
+    captured_at = datetime.fromisoformat(media_file["tookAt"].replace("Z", "+00:00"))
+    return target_start_at <= captured_at < target_end_at
 
 
 def _make_download_url(media_file: dict, base_url: str) -> str:
@@ -129,7 +141,12 @@ def _extract_album_data(soup: BeautifulSoup) -> dict:
 
 
 def _download_media_files_to_s3(
-    album_data: dict, base_url: str, s3_bucket: str, s3_prefix: str = "mitene-download"
+    album_data: dict,
+    base_url: str,
+    s3_bucket: str,
+    target_start_at: datetime,
+    target_end_at: datetime,
+    s3_prefix: str = "mitene-download",
 ) -> dict:
     """アルバムデータに基づいて、メディアをダウンロードしてS3に保存する
 
@@ -145,18 +162,31 @@ def _download_media_files_to_s3(
                   "total": 総メディア数,
                   "success": 成功数,
                   "failed": 失敗数,
+                  "skipped": 対象期間外としてスキップした数,
                   "files": [{"filename": str, "s3_key": str}, ...]
               }
     """
-    results = {
+    results: dict[str, Any] = {
         "total": len(album_data["mediaFiles"]),
         "success": 0,
         "failed": 0,
+        "skipped": 0,
         "files": [],
     }
 
     for media_file in album_data["mediaFiles"]:
         try:
+            # 旅行の期間のみダウンロードしたい
+            # みてねの仕様上期間指定ができないため、期間内の場合のみダウンロードする
+            if not _is_within_target_period(
+                media_file, target_start_at, target_end_at
+            ):
+                results["skipped"] += 1
+                logger.info(
+                    f"Skipped outside target period: {media_file.get('uuid')}"
+                )
+                continue
+
             filename = _make_filename(media_file)
             s3_key = f"{s3_prefix}/{filename}"
 
@@ -231,11 +261,23 @@ def lambda_handler(event, context):
         album_url = message_body["album_url"]
         page = message_body["page"]
         base_url = message_body["base_url"]
+        target_start_at = datetime.fromisoformat(
+            message_body["target_start_at"].replace("Z", "+00:00")
+        )
+        target_end_at = datetime.fromisoformat(
+            message_body["target_end_at"].replace("Z", "+00:00")
+        )
+        if target_start_at.tzinfo is None or target_end_at.tzinfo is None:
+            raise ValueError("Target period must include a timezone")
+        if target_start_at >= target_end_at:
+            raise ValueError("target_start_at must be before target_end_at")
 
         logger.info(f"[Step 1/2] Fetching page {page} from album...")
         logger.debug(f"  album_url: {album_url}")
         logger.debug(f"  page: {page}")
         logger.debug(f"  base_url: {base_url}")
+        logger.debug(f"  target_start_at: {target_start_at.isoformat()}")
+        logger.debug(f"  target_end_at: {target_end_at.isoformat()}")
 
         # ページをスクレイプ（パスワード認証対応）
         page_url = f"{album_url}?page={page}"
@@ -249,6 +291,8 @@ def lambda_handler(event, context):
             album_data,
             base_url,
             s3_bucket,
+            target_start_at,
+            target_end_at,
             s3_prefix=f"mitene-download/page-{page}",
         )
         logger.info("[Step 2/2] ✓ Media processing complete")
