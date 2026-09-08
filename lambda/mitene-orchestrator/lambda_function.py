@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime
 
 import boto3
@@ -10,6 +11,64 @@ log_level = os.getenv("LOG_LEVEL", "INFO").upper()
 logger.setLevel(log_level)
 
 sqs = boto3.client("sqs")
+
+
+@dataclass
+class OrchestratorConfig:
+    album_url: str
+    queue_url: str
+    pages_to_process: int
+    target_start_at: str
+    target_end_at: str
+
+
+def _load_config_from_env() -> OrchestratorConfig:
+    """環境変数を読み込み、検証済みのオーケストレータ設定を返す。"""
+    album_url = os.getenv("MITENE_ALBUM_URL")
+    queue_url = os.getenv("SQS_QUEUE_URL")
+    end_page_text = os.getenv("END_PAGE")
+    target_start_at = os.getenv("TARGET_START_AT")
+    target_end_at = os.getenv("TARGET_END_AT")
+
+    logger.info("Environment variables check:")
+    logger.info(f"  MITENE_ALBUM_URL: {'SET' if album_url else 'NOT SET'}")
+    logger.info(f"  SQS_QUEUE_URL: {'SET' if queue_url else 'NOT SET'}")
+    logger.info(f"  END_PAGE: {'SET' if end_page_text else 'NOT SET'}")
+    logger.info(f"  TARGET_START_AT: {'SET' if target_start_at else 'NOT SET'}")
+    logger.info(f"  TARGET_END_AT: {'SET' if target_end_at else 'NOT SET'}")
+
+    if not album_url:
+        raise ValueError("MITENE_ALBUM_URL is not set")
+    if not queue_url:
+        raise ValueError("SQS_QUEUE_URL is not set")
+    if not end_page_text:
+        raise ValueError("END_PAGE is not set")
+    if not target_start_at:
+        raise ValueError("TARGET_START_AT is not set")
+    if not target_end_at:
+        raise ValueError("TARGET_END_AT is not set")
+
+    try:
+        pages_to_process = int(end_page_text)
+    except ValueError as exc:
+        raise ValueError("END_PAGE must be an integer") from exc
+    if pages_to_process < 1:
+        raise ValueError("END_PAGE must be greater than or equal to 1")
+
+    start_datetime = datetime.fromisoformat(target_start_at.replace("Z", "+00:00"))
+    end_datetime = datetime.fromisoformat(target_end_at.replace("Z", "+00:00"))
+    if start_datetime.tzinfo is None or end_datetime.tzinfo is None:
+        raise ValueError("Target period must include a timezone")
+    if start_datetime >= end_datetime:
+        raise ValueError("TARGET_START_AT must be before TARGET_END_AT")
+
+    return OrchestratorConfig(
+        album_url=album_url,
+        queue_url=queue_url,
+        pages_to_process=pages_to_process,
+        target_start_at=target_start_at,
+        target_end_at=target_end_at,
+    )
 
 
 def _create_page_messages(
@@ -125,65 +184,25 @@ def lambda_handler(event, context):
     logger.info(f"[mitene-orchestrator] Starting Lambda handler at {timestamp}")
 
     try:
-        # 環境変数を取得
-        album_url = os.getenv("MITENE_ALBUM_URL")
-        queue_url = os.getenv("SQS_QUEUE_URL")
-        end_page_text = os.getenv("END_PAGE")
-        target_start_at = os.getenv("TARGET_START_AT")
-        target_end_at = os.getenv("TARGET_END_AT")
+        config = _load_config_from_env()
 
-        # 環境変数の検証
-        logger.info("Environment variables check:")
-        logger.info(f"  MITENE_ALBUM_URL: {'SET' if album_url else 'NOT SET'}")
-        logger.info(f"  SQS_QUEUE_URL: {'SET' if queue_url else 'NOT SET'}")
-        logger.info(f"  END_PAGE: {'SET' if end_page_text else 'NOT SET'}")
-        logger.info(f"  TARGET_START_AT: {'SET' if target_start_at else 'NOT SET'}")
-        logger.info(f"  TARGET_END_AT: {'SET' if target_end_at else 'NOT SET'}")
+        logger.info(f"[Step 1/2] Starting orchestration for album: {config.album_url}")
 
-        if not album_url:
-            raise ValueError("MITENE_ALBUM_URL is not set")
-        if not queue_url:
-            raise ValueError("SQS_QUEUE_URL is not set")
-        if not end_page_text:
-            raise ValueError("END_PAGE is not set")
-        if not target_start_at:
-            raise ValueError("TARGET_START_AT is not set")
-        if not target_end_at:
-            raise ValueError("TARGET_END_AT is not set")
-
-        try:
-            pages_to_process = int(end_page_text)
-        except ValueError as exc:
-            raise ValueError("END_PAGE must be an integer") from exc
-        if pages_to_process < 1:
-            raise ValueError("END_PAGE must be greater than or equal to 1")
-
-        start_datetime = datetime.fromisoformat(
-            target_start_at.replace("Z", "+00:00")
-        )
-        end_datetime = datetime.fromisoformat(target_end_at.replace("Z", "+00:00"))
-        if start_datetime.tzinfo is None or end_datetime.tzinfo is None:
-            raise ValueError("Target period must include a timezone")
-        if start_datetime >= end_datetime:
-            raise ValueError("TARGET_START_AT must be before TARGET_END_AT")
-
-        logger.info(f"[Step 1/2] Starting orchestration for album: {album_url}")
-
-        logger.info(f"[Step 1/2] Pages to process: 1-{pages_to_process}")
+        logger.info(f"[Step 1/2] Pages to process: 1-{config.pages_to_process}")
 
         # SQSにメッセージを送信
-        logger.info(f"[Step 2/2] Sending {pages_to_process} messages to SQS...")
+        logger.info(f"[Step 2/2] Sending {config.pages_to_process} messages to SQS...")
         _send_messages_to_sqs(
-            queue_url,
-            album_url,
-            pages_to_process,
-            target_start_at,
-            target_end_at,
+            config.queue_url,
+            config.album_url,
+            config.pages_to_process,
+            config.target_start_at,
+            config.target_end_at,
         )
         logger.info("[Step 2/2] ✓ All messages sent to SQS")
 
         logger.info(
-            f"[SUCCESS] Orchestration completed. Pages sent: {pages_to_process}"
+            f"[SUCCESS] Orchestration completed. Pages sent: {config.pages_to_process}"
         )
 
         return {
@@ -191,8 +210,8 @@ def lambda_handler(event, context):
             "body": json.dumps(
                 {
                     "message": "Orchestration completed",
-                    "pages_to_process": pages_to_process,
-                    "messages_sent": pages_to_process,
+                    "pages_to_process": config.pages_to_process,
+                    "messages_sent": config.pages_to_process,
                 }
             ),
         }
