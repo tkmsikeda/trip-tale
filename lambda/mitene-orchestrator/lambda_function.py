@@ -180,8 +180,7 @@ def lambda_handler(event, context):
     Returns:
         dict: Lambda実行結果
     """
-    timestamp = datetime.now().isoformat()
-    logger.info(f"[mitene-orchestrator] Starting Lambda handler at {timestamp}")
+    logger.info("[mitene-orchestrator] Starting Lambda handler")
 
     try:
         config = _load_config_from_env()
