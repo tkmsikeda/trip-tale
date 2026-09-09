@@ -135,6 +135,64 @@ def create_job_record(job_id, expected_count, audio_key=None):
     dynamodb_table.put_item(Item=item)
 
 
+def build_sqs_batch_entries(job_id, bucket, keys):
+    return [
+        {
+            "Id": str(index),
+            "MessageBody": json.dumps(
+                {"job_id": job_id, "bucket": bucket, "key": key}
+            ),
+        }
+        for index, key in enumerate(keys)
+    ]
+
+
+def send_sqs_batch_with_retry(sqs, queue_url, entries, job_id, bucket, max_retries=3):
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = sqs.send_message_batch(QueueUrl=queue_url, Entries=entries)
+        except Exception as exc:
+            logger.warning(
+                "SQS batch send failed; retrying batch",
+                extra={
+                    "job_id": job_id,
+                    "bucket": bucket,
+                    "batch_size": len(entries),
+                    "attempt": attempt,
+                    "error": str(exc),
+                },
+            )
+            if attempt == max_retries:
+                raise
+            continue
+
+        failed = response.get("Failed", [])
+        if not failed:
+            return
+
+        logger.warning(
+            "SQS batch send had failures; retrying failed entries",
+            extra={
+                "job_id": job_id,
+                "bucket": bucket,
+                "failed_count": len(failed),
+                "attempt": attempt,
+            },
+        )
+
+        failed_ids = {item["Id"] for item in failed}
+        entries = [entry for entry in entries if entry["Id"] in failed_ids]
+
+        if not entries:
+            return
+
+        if attempt == max_retries:
+            raise RuntimeError(
+                "Failed to enqueue "
+                f"{len(entries)} SQS messages after {max_retries} attempts"
+            )
+
+
 def enqueue_sqs_messages(job_id, bucket, object_keys):
     logger.info(
         "Enqueuing SQS messages",
@@ -142,9 +200,12 @@ def enqueue_sqs_messages(job_id, bucket, object_keys):
     )
 
     sqs = get_sqs_client()
-    for key in object_keys:
-        message = {"job_id": job_id, "bucket": bucket, "key": key}
-        sqs.send_message(QueueUrl=QUEUE_URL, MessageBody=json.dumps(message))
+    batch_size = 10
+
+    for start in range(0, len(object_keys), batch_size):
+        batch_keys = object_keys[start : start + batch_size]
+        entries = build_sqs_batch_entries(job_id, bucket, batch_keys)
+        send_sqs_batch_with_retry(sqs, QUEUE_URL, entries, job_id, bucket)
 
 
 def enqueue_slideshow_job(job_id, bucket, audio_key=None):
