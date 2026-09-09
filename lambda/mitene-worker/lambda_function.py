@@ -46,21 +46,16 @@ def _is_within_target_period(
 
 
 def _make_download_url(media_file: dict, base_url: str) -> str:
-    """メディア種別に応じて、ダウンロード先URLを返す
+    """認証が必要なメディア download エンドポイント URL を返す。
 
     Args:
-        media_file (dict): メディアファイル情報（mediaType, uuid, expiringUrl を含む）
+        media_file (dict): メディアファイル情報（uuid を含む）
         base_url (str): アルバムのベースURL
 
     Returns:
         str: メディアダウンロード用のURL
     """
-    if media_file.get("mediaType") == "movie":
-        return f"{base_url}/media_files/{media_file['uuid']}/download"
-
-    return media_file.get("expiringUrl") or (
-        f"{base_url}/media_files/{media_file['uuid']}/download"
-    )
+    return f"{base_url}/media_files/{media_file['uuid']}/download"
 
 
 def _find_gon_media_script_text(soup: BeautifulSoup) -> str | None:
@@ -97,12 +92,49 @@ def _find_gon_media_script_text(soup: BeautifulSoup) -> str | None:
     return None
 
 
-def _fetch_album_page(page_url: str, password: str | None = None) -> BeautifulSoup:
-    """アルバムページのHTMLを取得して、BeautifulSoupオブジェクトを返す
+def _login_to_mitene(album_url: str, password: str) -> requests.Session:
+    """CSRF token を取得してログインし、認証済み Session を返す。
+
+    Cookie は返却する Session のみに保持し、ログには出力しない。
+    """
+    login_url = f"{album_url.rstrip('/')}/login"
+    session = requests.Session()
+
+    response = session.get(login_url, timeout=30)
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+    token_input = soup.find("input", {"name": "authenticity_token"})
+    if not token_input or not token_input.get("value"):
+        raise ValueError("authenticity_token was not found in login page")
+
+    response = session.post(
+        login_url,
+        data={
+            "authenticity_token": token_input["value"],
+            "session[password]": password,
+            "commit": "ログイン",
+        },
+        allow_redirects=False,
+        timeout=30,
+    )
+    if response.status_code != 302:
+        response.raise_for_status()
+        raise requests.exceptions.HTTPError(
+            f"Unexpected login response status: {response.status_code}",
+            response=response,
+        )
+
+    return session
+
+
+def _fetch_album_page(
+    session: requests.Session, page_url: str
+) -> BeautifulSoup:
+    """認証済み Session でアルバムページを取得してパースする。
 
     Args:
-        page_url (str): アルバムページのURL
-        password (str | None): みてねアルバムのパスワード（オプション）
+        session (requests.Session): 認証済み HTTP Session
+        page_url (str): アルバムページの URL
 
     Returns:
         BeautifulSoup: パースされたHTMLオブジェクト
@@ -110,9 +142,8 @@ def _fetch_album_page(page_url: str, password: str | None = None) -> BeautifulSo
     Raises:
         requests.exceptions.HTTPError: HTTPリクエスト失敗時
     """
-    params = {"password": password} if password else {}
     logger.debug(f"Fetching album page: {page_url}")
-    response = requests.get(page_url, params=params)
+    response = session.get(page_url, timeout=30)
     logger.debug(f"HTTP status: {response.status_code}")
     response.raise_for_status()
     return BeautifulSoup(response.text, "html.parser")
@@ -141,6 +172,7 @@ def _extract_album_data(soup: BeautifulSoup) -> dict:
 
 
 def _download_media_files_to_s3(
+    session: requests.Session,
     album_data: dict,
     base_url: str,
     s3_bucket: str,
@@ -151,6 +183,7 @@ def _download_media_files_to_s3(
     """アルバムデータに基づいて、メディアをダウンロードしてS3に保存する
 
     Args:
+        session (requests.Session): 認証済み HTTP Session
         album_data (dict): アルバムデータ（mediaFiles キーを含む）
         base_url (str): アルバムのベースURL
         s3_bucket (str): S3バケット名
@@ -193,7 +226,7 @@ def _download_media_files_to_s3(
             media_url = _make_download_url(media_file, base_url)
 
             logger.info(f"Downloading: {filename}")
-            response = requests.get(media_url)
+            response = session.get(media_url, allow_redirects=True, timeout=30)
             response.raise_for_status()
 
             # S3にアップロード
@@ -216,6 +249,11 @@ def _download_media_files_to_s3(
             # みてね負荷軽減のため1秒待機
             time.sleep(1)
 
+        except requests.exceptions.HTTPError as e:
+            logger.error(
+                f"Failed to download/upload {media_file.get('uuid')}: {str(e)}"
+            )
+            results["failed"] += 1
         except Exception as e:
             logger.error(
                 f"Failed to download/upload {media_file.get('uuid')}: {str(e)}"
@@ -232,13 +270,12 @@ def lambda_handler(event, context):
 
     環境変数:
         S3_BUCKET_NAME (str): メディア保存先のS3バケット名（必須）
-        MITENE_ALBUM_PASSWORD (str): アルバムパスワード（オプション）
+        MITENE_ALBUM_PASSWORD (str): アルバムログイン用パスワード（必須）
 
     Returns:
         dict: Lambda実行結果
     """
-    timestamp = datetime.now().isoformat()
-    logger.info(f"[mitene-worker] Starting Lambda handler at {timestamp}")
+    logger.info("[mitene-worker] Starting Lambda handler")
 
     try:
         # 環境変数を取得
@@ -253,6 +290,8 @@ def lambda_handler(event, context):
 
         if not s3_bucket:
             raise ValueError("S3_BUCKET_NAME is not set")
+        if not album_password:
+            raise ValueError("MITENE_ALBUM_PASSWORD is not set")
 
         # SQSメッセージから抽出
         logger.debug(f"SQS event records count: {len(event['Records'])}")
@@ -279,15 +318,19 @@ def lambda_handler(event, context):
         logger.debug(f"  target_start_at: {target_start_at.isoformat()}")
         logger.debug(f"  target_end_at: {target_end_at.isoformat()}")
 
-        # ページをスクレイプ（パスワード認証対応）
+        # ログインからメディア取得まで同一 Session を利用する。
+        session = _login_to_mitene(album_url, album_password)
+
+        # ページをスクレイプ
         page_url = f"{album_url}?page={page}"
-        album_page_soup = _fetch_album_page(page_url, password=album_password)
+        album_page_soup = _fetch_album_page(session, page_url)
         album_data = _extract_album_data(album_page_soup)
         logger.info("[Step 1/2] ✓ Page fetched and parsed")
 
         # メディアをダウンロードしてS3に保存
         logger.info("[Step 2/2] Downloading media files to S3...")
         results = _download_media_files_to_s3(
+            session,
             album_data,
             base_url,
             s3_bucket,
